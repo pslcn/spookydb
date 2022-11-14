@@ -1,8 +1,6 @@
-import socket
+import sys
+import hashlib
 
-HOST, PORT = '127.0.0.1', 65432
-c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-c.connect((HOST, PORT))
+HOST, PORT = '127.0.0.1', 8080
 
-c.send(b'1')
-c.close()
+def hash_table(): return {[hashlib.md5('0'.encode()).hexdigest()] : 'Hello World!'}

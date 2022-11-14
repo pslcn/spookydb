@@ -1,20 +1,17 @@
-# Test server for key-value store
+from wsgiref.simple_server import make_server
 
-import socket
-import utils
+class Middleware:
+    def __init__(self, app):
+        self.app = app
 
-HOST, PORT = '127.0.0.1', 65432
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind((HOST, PORT))
+    def __call__(self, environ, start_response, *args, **kwargs):
+        response = self.app(environ, start_response)
+        return response
 
-s.listen(1)
-c, addr = s.accept()
+def app(environ, start_response):
+    response_body = '\n'.join([f'{key}: {value}' for key, value in sorted(environ.items())])
+    start_response(status='200 OK', headers=[('Content-Type', 'text/plain')]) 
+    return [response_body.encode()]
 
-data = utils.hash_table()
-print(data)
-
-while not(int(c.recv(8))):
-    pass
-
-c.close()
-s.close()
+server = make_server('localhost', 8080, app=app)
+server.serve_forever()
