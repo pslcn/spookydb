@@ -1,6 +1,6 @@
 from wsgiref.simple_server import make_server
-import pickle
 from os.path import exists
+import pickle
 
 store = {} if not(exists('save.p')) else pickle.load(open('save.p', 'rb'))
 
@@ -33,7 +33,6 @@ HOST, PORT = 'localhost', 8080
 if __name__ == '__main__':
     server = make_server(HOST, PORT, app=app)
     print(f'http://{HOST}:{PORT}')
-
     try: server.serve_forever()
     except KeyboardInterrupt: pass
 
