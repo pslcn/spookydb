@@ -2,6 +2,6 @@
 
 int main(void)
 {
-	// serve()	
+	serve();
 }
 

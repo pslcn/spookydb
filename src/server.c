@@ -138,6 +138,7 @@ t_work_new(t_work_queue_t *work_queue, thread_func_t func, void *arg)
 void
 tpool_wait(t_work_queue_t *work_queue)
 {
+	printf("tid=%p\n", pthread_self());
 	if(work_queue == NULL) return;
 	pthread_mutex_lock(&(work_queue->mtx));
 	while(1) {
@@ -173,7 +174,6 @@ tpool_destroy(t_work_queue_t *work_queue)
 	free(work_queue);
 }
 
-/*
 void 
 write_response(int connfd, char status[], char response_headers[], char response_body[])
 {
@@ -182,57 +182,26 @@ write_response(int connfd, char status[], char response_headers[], char response
 }
 
 void 
-*handle_req(int connfd)
+handle_req(int *connfd)
 {
-	if(connfd < 0) exit(1);
+	if(*connfd < 0) exit(1);
 	char req[BUFFSIZE], *req_method, *req_path, *req_query, *resp_body;
 	bzero(req, BUFFSIZE);
-	read(connfd, req, BUFFSIZE - 1);
+	read(*connfd, req, BUFFSIZE - 1);
 	req_method = strtok(req, " ");
 	req_path = strtok(strtok(NULL, " "), "?");
 	req_query = strtok(NULL, "?");
 	if(strcmp(req_method, "GET") == 0) { resp_body = "GET!"; }	
 	else if(strcmp(req_method, "PUT") == 0) { resp_body = "PUT!"; }
 	else if(strcmp(req_method, "DELETE") == 0) { resp_body = "DELETE"; }
-	write_response(connfd, "200 OK", "Content-Type: text/html", resp_body);
-	close(connfd);
-}
-
-void 
-handle(int connfd)
-{
-	if(connfd < 0) exit(1);
-	// Get a request
-	char req[BUFFSIZE];
-	bzero(req, BUFFSIZE);
-	read(connfd, req, BUFFSIZE - 1);
-	// Parse a request
-	char *req_method, *req_path, *req_query;
-	req_method = strtok(req, " ");
-	req_path = strtok(strtok(NULL, " "), "?");
-	req_query = strtok(NULL, "?");
-	if(req_query != NULL) {
-		printf("Request method: %s\nRequest path: %s\nRequest query: %s\n", req_method, req_path, req_query); 
-	} else {
-		printf("Request method: %s\nRequest path: %s\nRequest query: NULL\n", req_method, req_path);
-	}
-	// Handle a request
-	char *response_body;
-	if(strcmp(req_method, "GET") == 0) {
-		response_body = "GET!";
-	} else if(strcmp(req_method, "PUT") == 0) {
-		response_body = "PUT!";
-	} else if(strcmp(req_method, "DELETE") == 0) {
-		response_body = "DELETE!";
-	}
-	write_response(connfd, "200 OK", "Content-Type: text/html", response_body);
-	close(connfd);
+	write_response(*connfd, "200 OK", "Content-Type: text/html", resp_body);
+	close(*connfd);
 }
 
 void 
 serve(void)
 {
-	int sockfd, addr_len;
+	int sockfd, addr_len, *conns;
 	struct sockaddr_in servaddr, cli;
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if(sockfd == -1) exit(1);
@@ -241,44 +210,16 @@ serve(void)
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_port = htons(8080);
 	if((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0) exit(1);
-	// if(listen(sockfd, NTHREADS) < 0) exit(1);
-	listen(sockfd, NTHREADS);
-	// addr_len = sizeof(cli);
-	// handle(accept(sockfd, (struct sockaddr *)&cli, &addr_len));
-	// Shutdown
-	close(sockfd);
-}
-*/
 
-// Testing
-void 
-worker(void *arg)
-{
-	int *val = arg;
-	int old = *val;
-
-	*val += 1000;
-	printf("tid=%p, old=%d, val=%d\n", pthread_self(), old, *val);
-	if(*val%2) usleep(100000);
-}
-
-int
-main(int argc, char **argv)
-{
-	t_work_queue_t *work_queue;
-	int *vals;
-	work_queue = tpool_create();
-	vals = calloc(100, sizeof(*vals));
-	for(int i=0; i<100; i++) {
-		vals[i] = i;
-		t_work_new(work_queue, worker, vals+i);
-	}
+	t_work_queue_t *work_queue = tpool_create();
+	conns = (int *)malloc(1 * sizeof(int));
+	if(listen(sockfd, NTHREADS) < 0) exit(1);
+	addr_len = sizeof(cli);
+	conns[0] = accept(sockfd, (struct sockaddr*)&cli, &addr_len);
+	t_work_new(work_queue, handle_req, conns); 
 	tpool_wait(work_queue);
-	for(int i=0; i<100; i++) {
-		printf("%d\n", vals[i]);
-	}
-	free(vals);
+	free(conns);
 	tpool_destroy(work_queue);
-	return 0;
+	close(sockfd);
 }
 
