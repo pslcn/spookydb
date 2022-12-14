@@ -16,6 +16,7 @@
 
 #define NTHREADS 4
 #define BUFFSIZE 1024
+#define CAPACITY 50000
 
 typedef struct t_work {
 	thread_func_t func;
@@ -33,6 +34,17 @@ typedef struct t_work_queue {
 	size_t num_active;
 	bool stop;
 } t_work_queue_t;
+
+typedef struct ht_item {
+	char *key;
+	char *value;
+} ht_item_t;
+
+typedef struct htable {
+	ht_item_t **items;
+	int size;
+	int count;
+} htable_t;
 
 static t_work_t 
 *t_work_create(thread_func_t func, void *arg)
@@ -174,6 +186,91 @@ tpool_destroy(t_work_queue_t *work_queue)
 	free(work_queue);
 }
 
+unsigned long 
+hash_func(char *str)
+{
+	unsigned long i = 0;
+	for(int j = 0; str[j]; j++) i += str[j];
+	return i % CAPACITY;
+}
+
+ht_item_t 
+*create_ht_item(char *key, char *value)
+{
+	ht_item_t *item = (ht_item_t *)malloc(sizeof(ht_item_t));
+	item->key = (char *)malloc(strlen(key) + 1);
+	item->value = (char *)malloc(strlen(value) + 1);
+	strcpy(item->key, key);
+	strcpy(item->value, value);
+	return item;
+}
+
+htable_t
+*create_htable(void)
+{
+	htable_t *table = (htable_t *)malloc(sizeof(htable_t));
+	table->size = CAPACITY;
+	table->count = 0;
+	table->items = (ht_item_t **)calloc(table->size, sizeof(ht_item_t*));
+	for(int i = 0; i < table->size; i++) table->items[i] = NULL;
+	return table;
+}
+
+void 
+free_ht_item(ht_item_t *item)
+{
+	free(item->key);
+	free(item->value);
+	free(item);
+}
+
+void
+free_htable(htable_t *table)
+{
+	for(int i = 0; i < table->size; i++) {
+		ht_item_t *item = table->items[i];
+		if(item != NULL) free_ht_item(item);
+	}
+	free(table->items);
+	free(table);
+}
+
+void
+handle_ht_collision(htable_t *table, ht_item_t *item)
+{
+	printf("Collision!");
+}
+
+void
+htable_insert(htable_t *table, char *key, char *value)
+{
+	ht_item_t *item = create_ht_item(key, value);
+	int idx = hash_func(key);
+	ht_item_t *current = table->items[idx];
+	if(current == NULL) {
+		if(table->count == table->size) {
+			printf("Table is full!\n");
+			free_ht_item(item);
+			return;
+		}
+		table->items[idx] = item;
+		table->count++;
+	} else if(strcmp(current->key, key) == 0) {
+		strcpy(table->items[idx]->value, value);
+	} else {
+		handle_ht_collision(table, item);
+	}
+}
+
+char
+*htable_search(htable_t *table, char *key)
+{
+	int idx = hash_func(key);
+	ht_item_t *item = table->items[idx];
+	if(item != NULL && (strcmp(item->key, key) == 0)) return item->value;
+	return NULL;
+}
+
 void 
 write_response(int connfd, char status[], char response_headers[], char response_body[])
 {
@@ -184,17 +281,34 @@ write_response(int connfd, char status[], char response_headers[], char response
 void 
 handle_req(int *connfd)
 {
+	htable_t *hello_ht = create_htable();
+	htable_insert(hello_ht, "Hello", "World");
+
 	if(*connfd < 0) exit(1);
 	char req[BUFFSIZE], *req_method, *req_path, *req_query, *resp_body;
 	bzero(req, BUFFSIZE);
 	read(*connfd, req, BUFFSIZE - 1);
 	req_method = strtok(req, " ");
 	req_path = strtok(strtok(NULL, " "), "?");
+	char formatted_path[BUFFSIZE];
+	for(int i = 1; i < strlen(req_path); i++) {
+		formatted_path[i - 1] = req_path[i];
+	}
 	req_query = strtok(NULL, "?");
-	if(strcmp(req_method, "GET") == 0) { resp_body = "GET!"; }	
-	else if(strcmp(req_method, "PUT") == 0) { resp_body = "PUT!"; }
-	else if(strcmp(req_method, "DELETE") == 0) { resp_body = "DELETE"; }
-	write_response(*connfd, "200 OK", "Content-Type: text/html", resp_body);
+	if(strcmp(req_method, "GET") == 0) { 
+		char *val = htable_search(hello_ht, formatted_path);
+		if(val != NULL) {
+			resp_body = val;
+		} else {
+			resp_body = "NULL";
+		}
+	}	else if(strcmp(req_method, "PUT") == 0) { 
+		resp_body = "PUT!"; 
+	} else if(strcmp(req_method, "DELETE") == 0) { 
+		resp_body = "DELETE"; 
+	}
+	write_response(*connfd, "200 OK", "Content-Type: text/plain", resp_body);
+	free_htable(hello_ht);
 	close(*connfd);
 }
 
