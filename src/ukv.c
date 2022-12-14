@@ -2,7 +2,6 @@
 
 int main(void)
 {
-	start_server();
-	stop_server();
+	// serve()	
 }
 
