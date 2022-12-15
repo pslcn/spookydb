@@ -25,25 +25,20 @@ typedef struct t_work {
 } t_work_t;
 
 typedef struct t_work_queue {
-	t_work_t *first;
-	t_work_t *last;
+	t_work_t *first, *last;
 	pthread_mutex_t mtx;
-	pthread_cond_t work_cond;
-	pthread_cond_t busy_cond;
-	size_t num_working;
-	size_t num_active;
+	pthread_cond_t work_cond, busy_cond;
+	size_t num_working, num_active;
 	bool stop;
 } t_work_queue_t;
 
 typedef struct ht_item {
-	char *key;
-	char *value;
+	char *key, *value;
 } ht_item_t;
 
 typedef struct htable {
 	ht_item_t **items;
-	int size;
-	int count;
+	int size, count;
 } htable_t;
 
 static t_work_t 
@@ -244,6 +239,7 @@ handle_ht_collision(htable_t *table, ht_item_t *item)
 void
 htable_insert(htable_t *table, char *key, char *value)
 {
+	printf("Inserting value '%s' in key '%s'\n", value, key);
 	ht_item_t *item = create_ht_item(key, value);
 	int idx = hash_func(key);
 	ht_item_t *current = table->items[idx];
@@ -278,44 +274,66 @@ write_response(int connfd, char status[], char response_headers[], char response
 	write(connfd, response, strlen(response));
 }
 
+htable_t *ht;
+
 void 
 handle_req(int *connfd)
 {
-	htable_t *hello_ht = create_htable();
-	htable_insert(hello_ht, "Hello", "World");
-
 	if(*connfd < 0) exit(1);
+
 	char req[BUFFSIZE], *req_method, *req_path, *req_query, *resp_body;
 	bzero(req, BUFFSIZE);
 	read(*connfd, req, BUFFSIZE - 1);
-	req_method = strtok(req, " ");
-	req_path = strtok(strtok(NULL, " "), "?");
-	char formatted_path[BUFFSIZE];
-	for(int i = 1; i < strlen(req_path); i++) {
-		formatted_path[i - 1] = req_path[i];
+
+	char firstline[80];
+	for(int c = 0; c < 80; c++) {
+		firstline[c] = *(req + c);
+		if(*(req + c) == '\n') break;
 	}
+	req_method = strtok(firstline, " ");
+	req_path = strtok(strtok(NULL, " "), "?");
+	char formatted_path[40];
+	for(int c = 1; c < strlen(req_path); c++) {
+		formatted_path[c - 1] = req_path[c];
+	}
+	req_path = formatted_path;
 	req_query = strtok(NULL, "?");
+
 	if(strcmp(req_method, "GET") == 0) { 
-		char *val = htable_search(hello_ht, formatted_path);
+		char *val = htable_search(ht, req_path);
 		if(val != NULL) {
 			resp_body = val;
 		} else {
 			resp_body = "NULL";
 		}
 	}	else if(strcmp(req_method, "PUT") == 0) { 
-		resp_body = "PUT!"; 
+		char req_body[BUFFSIZE];
+		int isbody = 0;
+		for(int c = 0; c < strlen(req); c++) {
+			if(isbody == 0) {
+				if(*(req + c) == '\n' && *(req + c + 2) == '\n') {
+					c += 2;
+					isbody = c + 1;
+				}
+			
+			} else {
+				req_body[c - isbody] = *(req + c);
+			}
+		}
+
+		htable_insert(ht, req_path, req_body);
+		resp_body = ""; 
 	} else if(strcmp(req_method, "DELETE") == 0) { 
-		resp_body = "DELETE"; 
+		resp_body = ""; 
 	}
 	write_response(*connfd, "200 OK", "Content-Type: text/plain", resp_body);
-	free_htable(hello_ht);
 	close(*connfd);
 }
 
 void 
 serve(void)
 {
-	int sockfd, addr_len, *conns;
+	int sockfd, addr_len;
 	struct sockaddr_in servaddr, cli;
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if(sockfd == -1) exit(1);
@@ -326,14 +344,26 @@ serve(void)
 	if((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0) exit(1);
 
 	t_work_queue_t *work_queue = tpool_create();
-	conns = (int *)malloc(1 * sizeof(int));
 	if(listen(sockfd, NTHREADS) < 0) exit(1);
 	addr_len = sizeof(cli);
-	conns[0] = accept(sockfd, (struct sockaddr*)&cli, &addr_len);
-	t_work_new(work_queue, handle_req, conns); 
+
+	htable_t *test_ht = create_htable();
+	htable_insert(test_ht, "Hello", "World");
+	ht = test_ht;
+
+	int *conns = (int *)malloc(2 * sizeof(int *));
+	conns[0] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
+	t_work_new(work_queue, handle_req, conns);
+	conns[1] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
+	t_work_new(work_queue, handle_req, conns + 1);
+
+	// Something like the below would use a function returning a function pointer - meaning only one argument would be needed (the 'conn_fd').
+	// t_work_new(work_queue, handle_req(test_ht), accept(sockfd, (struct sockaddr *)&cli, &addr_len));
+
 	tpool_wait(work_queue);
 	free(conns);
 	tpool_destroy(work_queue);
+	free_htable(test_ht);
 	close(sockfd);
 }
 
