@@ -258,6 +258,22 @@ htable_insert(htable_t *table, char *key, char *value)
 	}
 }
 
+int 
+htable_remove(htable_t *table, char *key)
+{
+	printf("Deleting key '%s'\n", key);
+	int idx = hash_func(key);
+	ht_item_t *current = table->items[idx];
+	if(current != NULL & (strcmp(current->key, key) == 0)) {
+		table->items[idx] = NULL;	
+		table->count--;
+		free_ht_item(current);
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
 char
 *htable_search(htable_t *table, char *key)
 {
@@ -324,6 +340,7 @@ handle_req(int *connfd)
 		htable_insert(ht, req_path, req_body);
 		resp_body = ""; 
 	} else if(strcmp(req_method, "DELETE") == 0) { 
+		htable_remove(ht, req_path);
 		resp_body = ""; 
 	}
 	write_response(*connfd, "200 OK", "Content-Type: text/plain", resp_body);
@@ -351,11 +368,13 @@ serve(void)
 	htable_insert(test_ht, "Hello", "World");
 	ht = test_ht;
 
-	int *conns = (int *)malloc(2 * sizeof(int *));
+	int *conns = (int *)malloc(3 * sizeof(int *));
 	conns[0] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
 	t_work_new(work_queue, handle_req, conns);
 	conns[1] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
 	t_work_new(work_queue, handle_req, conns + 1);
+	conns[2] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
+	t_work_new(work_queue, handle_req, conns + 2);
 
 	// Something like the below would use a function returning a function pointer - meaning only one argument would be needed (the 'conn_fd').
 	// t_work_new(work_queue, handle_req(test_ht), accept(sockfd, (struct sockaddr *)&cli, &addr_len));

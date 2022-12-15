@@ -27,6 +27,7 @@ void free_ht_item(ht_item_t *item);
 void free_htable(htable_t *table);
 void handle_ht_collision(htable_t *table, ht_item_t *item);
 void htable_insert(htable_t *table, char *key, char *value);
+int htable_remove(htable_t *table, char *key);
 char *htable_search(htable_t *table, char *key);
 
 void write_response(int connfd, char status[], char reponse_headers[], char response_body[]);
