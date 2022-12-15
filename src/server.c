@@ -145,7 +145,6 @@ t_work_new(t_work_queue_t *work_queue, thread_func_t func, void *arg)
 void
 tpool_wait(t_work_queue_t *work_queue)
 {
-	printf("tid=%p\n", pthread_self());
 	if(work_queue == NULL) return;
 	pthread_mutex_lock(&(work_queue->mtx));
 	while(1) {
@@ -338,18 +337,43 @@ handle_req(int *connfd)
 		}
 
 		htable_insert(ht, req_path, req_body);
-		resp_body = ""; 
+		resp_body = ("tid=%p method=PUT", pthread_self());
 	} else if(strcmp(req_method, "DELETE") == 0) { 
 		htable_remove(ht, req_path);
-		resp_body = ""; 
+		resp_body = ("tid=%p method=DELETE", pthread_self());
 	}
 	write_response(*connfd, "200 OK", "Content-Type: text/plain", resp_body);
 	close(*connfd);
 }
 
+sig_atomic_t keep_serving = 1;
+
+void
+term_handler(int signum) 
+{
+	keep_serving = 0;
+}
+
+static void
+start_daemon(void)
+{
+	pid_t pid = fork();
+	if(pid < 0) exit(1);
+	if(pid > 0) exit(0);
+	if(setsid() < 0) exit(1);
+	signal(SIGTERM, term_handler);
+	pid = fork();
+	if(pid < 0) exit(1);
+	if(pid > 0) exit(0);
+	umask(0);
+	for(int x = sysconf(_SC_OPEN_MAX); x >= 0; x--)	close(x);
+}
+
 void 
 serve(void)
 {
+	start_daemon();
+
 	int sockfd, addr_len;
 	struct sockaddr_in servaddr, cli;
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -368,6 +392,7 @@ serve(void)
 	htable_insert(test_ht, "Hello", "World");
 	ht = test_ht;
 
+	/*
 	int *conns = (int *)malloc(3 * sizeof(int *));
 	conns[0] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
 	t_work_new(work_queue, handle_req, conns);
@@ -375,13 +400,22 @@ serve(void)
 	t_work_new(work_queue, handle_req, conns + 1);
 	conns[2] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
 	t_work_new(work_queue, handle_req, conns + 2);
+	*/
+
+	int *conns = (int *)malloc(NTHREADS * sizeof(int *));
+	while(keep_serving) {
+		// int *prevref = &conns;
+		// int *conn_fd = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
+		conns[0] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
+		t_work_new(work_queue, handle_req, conns);
+	}
 
 	// Something like the below would use a function returning a function pointer - meaning only one argument would be needed (the 'conn_fd').
 	// t_work_new(work_queue, handle_req(test_ht), accept(sockfd, (struct sockaddr *)&cli, &addr_len));
 
-	tpool_wait(work_queue);
-	free(conns);
-	tpool_destroy(work_queue);
+	tpool_wait(work_queue); 
+	// free(conns);
+	tpool_destroy(work_queue); 
 	free_htable(test_ht);
 	close(sockfd);
 }

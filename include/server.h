@@ -32,6 +32,8 @@ char *htable_search(htable_t *table, char *key);
 
 void write_response(int connfd, char status[], char reponse_headers[], char response_body[]);
 void handle_req(int *connfd);
+void term_handler(int signum);
+static void start_daemon(void);
 void serve(void);
 
 #endif
