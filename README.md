@@ -1,6 +1,6 @@
-# ukeyvalue
+# SpookyDB
 
-To build ukevalue, simply:
+To build SpookyDB, simply:
 
 ```bash
 make
@@ -42,4 +42,4 @@ curl --http0.9 localhost:8080/akey
 
 ### Arch Notes
 
-ukeyvalue has one primary thread pool, which is used for request handling, and consists of 4 threads - meaning a maximum of 4 clients can concurrently operate on the database.
+SpookyDB has one primary thread pool, which is used for request handling, and consists of 4 threads - meaning a maximum of 4 clients can concurrently operate on the database.
