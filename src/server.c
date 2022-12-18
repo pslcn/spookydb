@@ -392,16 +392,6 @@ serve(void)
 	htable_insert(test_ht, "Hello", "World");
 	ht = test_ht;
 
-	/*
-	int *conns = (int *)malloc(3 * sizeof(int *));
-	conns[0] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
-	t_work_new(work_queue, handle_req, conns);
-	conns[1] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
-	t_work_new(work_queue, handle_req, conns + 1);
-	conns[2] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
-	t_work_new(work_queue, handle_req, conns + 2);
-	*/
-
 	int *conns = (int *)malloc(NTHREADS * sizeof(int *));
 	while(keep_serving) {
 		// int *prevref = &conns;
@@ -414,9 +404,15 @@ serve(void)
 	// t_work_new(work_queue, handle_req(test_ht), accept(sockfd, (struct sockaddr *)&cli, &addr_len));
 
 	tpool_wait(work_queue); 
-	// free(conns);
+	free(conns);
 	tpool_destroy(work_queue); 
 	free_htable(test_ht);
 	close(sockfd);
+}
+
+int 
+main(void)
+{
+	serve();
 }
 
