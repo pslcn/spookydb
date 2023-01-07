@@ -1,6 +1,17 @@
 # SpookyDB
 
-### Usage
+## Server-Side Usage
+
+To start the key-value database server, simply:
+
+```bash
+make
+./server
+```
+
+At its current stage of development, to kill the server you have to manually stop the process (using something like htop, for example).
+
+## Client-Side Usage
 
 Putting 'avalue' in 'akey':
 
