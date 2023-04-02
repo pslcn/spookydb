@@ -8,8 +8,10 @@
 #include <syslog.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <stdbool.h>
+#include <stddef.h>
 
-#include "db.h"
+#include "net_threads.h"
 
 #define NTHREADS 4
 
@@ -27,16 +29,14 @@ typedef struct t_work_queue {
 	bool stop;
 } t_work_queue_t;
 
-static t_work_t *t_work_create(thread_func_t func, void *arg) 
+static void t_work_create(t_work_t **work, thread_func_t func, void *arg) 
 {
-	t_work_t *work;
 	if (func == NULL) 
-		return NULL;
-	work = malloc(sizeof(work));
-	work->func = func;
-	work->arg = arg;
-	work->next = NULL;
-	return work;
+		return;
+	*work = malloc(sizeof(*work));
+	(*work)->func = func;
+	(*work)->arg = arg;
+	(*work)->next = NULL;
 }
 
 static void t_work_free(t_work_t *work) 
@@ -46,21 +46,19 @@ static void t_work_free(t_work_t *work)
 	free(work);
 }
 
-static t_work_t *t_work_get(t_work_queue_t *work_queue)
+static void t_work_get(t_work_t **work, t_work_queue_t *work_queue)
 {
-	t_work_t *work;
 	if (work_queue == NULL)
-		return NULL;
-	work = work_queue->first;
-	if (work == NULL)
-		return NULL;
-	if (work->next == NULL) {
+		return;
+	*work = work_queue->first;
+	if (*work == NULL)
+		return;
+	if ((*work)->next == NULL) {
 		work_queue->first = NULL;
 		work_queue->last = NULL;
 	} else {
-		work_queue->first = work->next;
+		work_queue->first = (*work)->next;
 	}
-	return work;
 }
 
 static void *t_worker(void *arg) 
@@ -73,7 +71,7 @@ static void *t_worker(void *arg)
 			pthread_cond_wait(&(work_queue->work_cond), &(work_queue->mtx));
 		if (work_queue->stop)
 			break;
-		work = t_work_get(work_queue);
+		t_work_get(&work, work_queue);
 		work_queue->num_working++;
 		pthread_mutex_unlock(&(work_queue->mtx));
 		if (work != NULL) {
@@ -92,23 +90,21 @@ static void *t_worker(void *arg)
 	return NULL;
 }
 
-t_work_queue_t *tpool_create(void)
+void t_pool_create(t_work_queue_t **work_queue)
 {
-	t_work_queue_t *work_queue;
 	pthread_t thread;
 	int t;
-	work_queue = calloc(1, sizeof(*work_queue));
-	work_queue->num_active = NTHREADS;
-	pthread_mutex_init(&(work_queue->mtx), NULL);
-	pthread_cond_init(&(work_queue->work_cond), NULL);
-	pthread_cond_init(&(work_queue->busy_cond), NULL);
-	work_queue->first = NULL;
-	work_queue->last = NULL;
+	*work_queue = calloc(1, sizeof(**work_queue));
+	(*work_queue)->num_active = NTHREADS;
+	pthread_mutex_init(&((*work_queue)->mtx), NULL);
+	pthread_cond_init(&((*work_queue)->work_cond), NULL);
+	pthread_cond_init(&((*work_queue)->busy_cond), NULL);
+	(*work_queue)->first = NULL;
+	(*work_queue)->last = NULL;
 	for (t = 0; t < NTHREADS; ++t) {
-		pthread_create(&thread, NULL, t_worker, work_queue);
+		pthread_create(&thread, NULL, t_worker, *work_queue);
 		pthread_detach(thread);
 	}
-	return work_queue;
 }
 
 bool t_work_new(t_work_queue_t *work_queue, thread_func_t func, void *arg)
@@ -116,7 +112,7 @@ bool t_work_new(t_work_queue_t *work_queue, thread_func_t func, void *arg)
 	t_work_t *work;
 	if (work_queue == NULL)
 		return false;
-	work = t_work_create(func, arg);
+	t_work_create(&work, func, arg);
 	if (work == NULL) return false;
 	pthread_mutex_lock(&(work_queue->mtx));
 	if (work_queue->first == NULL) {
@@ -131,7 +127,7 @@ bool t_work_new(t_work_queue_t *work_queue, thread_func_t func, void *arg)
 	return true;
 }
 
-void tpool_wait(t_work_queue_t *work_queue)
+void t_pool_wait(t_work_queue_t *work_queue)
 {
 	if (work_queue == NULL) 
 		return; 
@@ -146,7 +142,7 @@ void tpool_wait(t_work_queue_t *work_queue)
 	pthread_mutex_unlock(&(work_queue->mtx));
 }
 
-void tpool_destroy(t_work_queue_t *work_queue)
+void t_pool_destroy(t_work_queue_t *work_queue)
 {
 	t_work_t *work, *work2;
 	if (work_queue == NULL) 
@@ -161,7 +157,7 @@ void tpool_destroy(t_work_queue_t *work_queue)
 	work_queue->stop = true;
 	pthread_cond_broadcast(&(work_queue->work_cond));
 	pthread_mutex_unlock(&(work_queue->mtx));
-	tpool_wait(work_queue);
+	t_pool_wait(work_queue);
 	pthread_mutex_destroy(&(work_queue->mtx));
 	pthread_cond_destroy(&(work_queue->work_cond));
 	pthread_cond_destroy(&(work_queue->busy_cond));
@@ -175,25 +171,15 @@ void term_handler(int signum)
 	keep_serving = 0;
 }
 
-void test_func(int *anything)
-{
-	printf("%p\n", pthread_self());	
-}
-
 void serve(void)
 {
-	/* Test thread pool */
-	t_work_queue_t *work_queue = tpool_create();
-	int anum = 5;
-	int *anything = &anum;
+	t_work_queue_t *work_queue;
+	t_pool_create(&work_queue);
 	while (keep_serving) {
-		t_work_new(work_queue, test_func, anything);
-		t_work_new(work_queue, test_func, anything);
-		t_work_new(work_queue, test_func, anything);
-		t_work_new(work_queue, test_func, anything);
+
 	}
-	tpool_wait(work_queue);
-	tpool_destroy(work_queue);
+	t_pool_wait(work_queue);
+	t_pool_destroy(work_queue);
 }
 
 int main(void)
