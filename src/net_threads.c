@@ -164,26 +164,3 @@ void t_pool_destroy(t_work_queue_t *work_queue)
 	free(work_queue);
 }
 
-sig_atomic_t keep_serving = 1;
-
-void term_handler(int signum)
-{
-	keep_serving = 0;
-}
-
-void serve(void)
-{
-	t_work_queue_t *work_queue;
-	t_pool_create(&work_queue);
-	while (keep_serving) {
-
-	}
-	t_pool_wait(work_queue);
-	t_pool_destroy(work_queue);
-}
-
-int main(void)
-{
-	serve();
-	return 0;
-}
