@@ -372,7 +372,7 @@ start_daemon(void)
 void 
 serve(void)
 {
-	start_daemon();
+	// start_daemon();
 
 	int sockfd, addr_len;
 	struct sockaddr_in servaddr, cli;
