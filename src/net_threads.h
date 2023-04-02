@@ -1,6 +1,8 @@
 #ifndef NET_THREADS_H_
 #define NET_THREADS_H_
 
+#include <stdbool.h>
+
 typedef void (*thread_func_t)(void *arg);
 typedef struct t_work_queue t_work_queue_t;
 

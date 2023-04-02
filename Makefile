@@ -1,2 +1,2 @@
-all: src/server.c
-	gcc src/server.c -o bin/server
+all: src/db.c src/net_threads.c
+	gcc src/db.c src/net_threads.c -o bin/db

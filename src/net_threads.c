@@ -8,7 +8,6 @@
 #include <syslog.h>
 #include <sys/time.h>
 #include <pthread.h>
-#include <stdbool.h>
 #include <stddef.h>
 
 #include "net_threads.h"
