@@ -142,57 +142,68 @@ void write_resp(int connfd, char status[], char resp_headers[], char resp_body[]
 
 htable_t *ht;
 
-void handle_req(int *connfd)
+void parse_req(char *req, char *r_method[], char *r_path[], char *r_query[], char *r_body[])
 {
-	if (*connfd < 0) 
-		exit(1);
-	char req[BUFFSIZE], *req_method, *req_path, *req_query, *resp_body;
-	char firstline[80];
+	char *rm, *rp, *rq, rb[BUFFSIZE];
+	char firstline[80], formatted_path[40];
 	int c;
-	char formatted_path[40];
-	char *val;
-	char req_body[BUFFSIZE];
 	int isbody = 0;
-	bzero(req, BUFFSIZE);
-	read(*connfd, req, BUFFSIZE - 1);
 	for (c = 0; c < 80; ++c) {
-		firstline[c] = *(req + c);
-		if (*(req + c) == '\n')
+		firstline[c] = req[c];
+		if (req[c] == '\n') 
 			break;
 	}
-	req_method = strtok(firstline, " ");
-	req_path = strtok(strtok(NULL, " "), "?");
-	for (c = 1; c < strlen(req_path); ++c) {
-		formatted_path[c - 1] = req_path[c];
+	rm = strtok(firstline, " ");
+	rp = strtok(strtok(NULL, " "), "?");
+	for (c = 1; c < strlen(rp); ++c) 
+		formatted_path[c - 1] = rp[c];
+	rq = strtok(NULL, "?");
+	if (strcmp(rm, "PUT") == 0) { 
+		for (c = 0; c < strlen(req); ++c) {
+			if (isbody == 0) {
+				if (req[c] == '\n' && req[c + 2] == '\n') {
+					c += 2;
+					isbody = c + 1;
+				}
+			} else {
+				rb[c - isbody] = req[c];
+			}
+		}
+	} else {
+		strcpy(rb, "NULL");
 	}
-	req_path = formatted_path;
-	req_query = strtok(NULL, "?");
-	if (strcmp(req_method, "GET") == 0) {
-		val = htable_search(ht, req_path);
+	strcpy(*r_method, rm);
+	strcpy(*r_path, rp);
+	strcpy(*r_body, rb);
+}
+
+void handle_req(int connfd)
+{
+	if (connfd < 0) 
+		exit(1);
+	char req[BUFFSIZE];
+	char *val;
+	char r_method[1024], r_path[1024], r_query[1024], r_body[1024];
+	char *resp_body;
+	bzero(req, BUFFSIZE);
+	read(connfd, req, BUFFSIZE - 1);
+	parse_req(req, &r_method, &r_path, &r_query, &r_body);
+	if (strcmp(r_method, "GET") == 0) {
+		val = htable_search(ht, r_path);	
 		if (val != NULL) {
 			resp_body = val;
 		} else {
 			resp_body = "NULL";
 		}
-	} else if (strcmp(req_method, "PUT") == 0) {
-		for (c = 0; c < strlen(req); ++c) {
-			if (isbody == 0) {
-				if (*(req + c) == '\n' && *(req + c + 2) == '\n') {
-					c += 2;
-					isbody = c + 1;
-				}
-			} else {
-				req_body[c - isbody] = *(req + c);
-			}
-		}
-		htable_insert(ht, req_path, req_body);
+	} else if (strcmp(r_method, "PUT") == 0) {
+		htable_insert(ht, r_path, r_body);
 		resp_body = ("tid=%p method=PUT", pthread_self());
-	} else if (strcmp(req_method, "DELETE") == 0) {
-		htable_remove(ht, req_path);
+	} else if (strcmp(r_method, "DELETE") == 0) {
+		htable_remove(ht, r_path);
 		resp_body = ("tid=%p method=DELETE", pthread_self());
 	}
-	write_resp(*connfd, "200 OK", "Content-Type: text/plain", resp_body);
-	close(*connfd);
+	write_resp(connfd, "200 OK", "Content-Type: text/plain", resp_body);
+	close(connfd);
 }
 
 /* Temporary */
@@ -225,33 +236,31 @@ int main(void)
 	int sockfd, addr_len;
 	struct sockaddr_in servaddr, cli;
 	t_work_queue_t *work_queue;
-	htable_t *test_ht;
-	int *conns;
+
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd == -1)
+	if (sockfd == -1) 
 		exit(1);
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_port = htons(8080);
+
 	if ((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0) 
 		exit(1);
 	t_pool_create(&work_queue);
-	if (listen(sockfd, 4) < 0) /* NTHREADS = 4 */
+	if (listen(sockfd, 10) < 0) 
 		exit(1);
 	addr_len = sizeof(cli);
-	create_htable(&test_ht);
-	htable_insert(test_ht, "Hello", "World");
-	ht = test_ht;
-	conns = malloc(4 * sizeof(int*)); /* NTHREADS = 4 */
+	create_htable(&ht);
+	htable_insert(ht, "Hello", "World");
+
 	while (keep_serving) {
-		conns[0] = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
-		t_work_new(work_queue, handle_req, conns);
+		t_work_new(work_queue, handle_req, accept(sockfd, (struct sockaddr *)&cli, &addr_len));
 	}
+
 	t_pool_wait(work_queue);
-	free(conns);
 	t_pool_destroy(work_queue);
-	free_htable(test_ht);
+	free_htable(ht);
 	close(sockfd);
 	return 0;
 }
