@@ -16,6 +16,7 @@
 
 #define BUFFSIZE 1024
 #define CAPACITY 50000
+#define LENGTH(X) (sizeof X / sizeof X[0])
 
 /* Temporary hash table implementation */
 typedef struct {
@@ -41,7 +42,6 @@ void create_ht_item(ht_item_t **item, char *key, char *value)
 	*item = malloc(sizeof(ht_item_t));
 	(*item)->key = malloc(strlen(key) + 1);
 	(*item)->value = malloc(strlen(value) + 1);
-	/* TODO: Fix vulnerabilities */
 	strcpy((*item)->key, key);
 	strcpy((*item)->value, value);
 }
@@ -142,52 +142,60 @@ void write_resp(int connfd, char status[], char resp_headers[], char resp_body[]
 
 htable_t *ht;
 
-void parse_req(char *req, char *r_method[], char *r_path[], char *r_query[], char *r_body[])
+void parse_req(char *req, char *r_method[], char *r_path[], char *r_body[])
 {
-	char *rm, *rp, *rq, rb[BUFFSIZE];
-	char firstline[80], formatted_path[40];
+	char rm[2048], rp[2048], rb[2048];
+	int spaces, isbody = 0;
 	int c;
-	int isbody = 0;
-	for (c = 0; c < 80; ++c) {
-		firstline[c] = req[c];
-		if (req[c] == '\n') 
-			break;
+	for (c = 0; c < 512; ++c) {
+		if (spaces == 0) {
+			if (req[c] != ' ') {
+				rm[c] = req[c];
+			} else {
+				rm[c] = '\0';
+				spaces = c + 1; 
+			}
+		} else {
+			if (req[c] != ' ') {
+				rp[c - spaces] = req[c];
+			} else {
+				rp[c - spaces] = '\0';
+				break;
+			}
+		}
 	}
-	rm = strtok(firstline, " ");
-	rp = strtok(strtok(NULL, " "), "?");
-	for (c = 1; c < strlen(rp); ++c) 
-		formatted_path[c - 1] = rp[c];
-	rq = strtok(NULL, "?");
-	if (strcmp(rm, "PUT") == 0) { 
-		for (c = 0; c < strlen(req); ++c) {
+	if (strcmp(rm, "PUT") == 0) {
+		for (c = 0; c < BUFFSIZE; ++c) {
 			if (isbody == 0) {
 				if (req[c] == '\n' && req[c + 2] == '\n') {
 					c += 2;
 					isbody = c + 1;
-				}
+				} 
 			} else {
-				rb[c - isbody] = req[c];
+				rb[c - isbody] = req[c]; 
 			}
 		}
+		rb[BUFFSIZE - isbody] = '\0';
 	} else {
-		strcpy(rb, "NULL");
+		strncpy(rb, "NULL", 5);
 	}
-	strcpy(*r_method, rm);
-	strcpy(*r_path, rp);
-	strcpy(*r_body, rb);
+	strcpy(r_method, rm);
+	strcpy(r_path, rp);
+	strcpy(r_body, rb);
 }
 
-void handle_req(int connfd)
+void handle_req(int *connfd)
 {
-	if (connfd < 0) 
+	if (*connfd < 0) 
 		exit(1);
 	char req[BUFFSIZE];
 	char *val;
-	char r_method[1024], r_path[1024], r_query[1024], r_body[1024];
+	char r_method[2048], r_path[2048], r_body[2048];
 	char *resp_body;
 	bzero(req, BUFFSIZE);
-	read(connfd, req, BUFFSIZE - 1);
-	parse_req(req, &r_method, &r_path, &r_query, &r_body);
+	read(*connfd, req, BUFFSIZE - 1);
+	parse_req(req, &r_method, &r_path, &r_body);
+	printf("r_method=%s r_path=%s r_body=%s\n", r_method, r_path, r_body);
 	if (strcmp(r_method, "GET") == 0) {
 		val = htable_search(ht, r_path);	
 		if (val != NULL) {
@@ -202,8 +210,8 @@ void handle_req(int connfd)
 		htable_remove(ht, r_path);
 		resp_body = ("tid=%p method=DELETE", pthread_self());
 	}
-	write_resp(connfd, "200 OK", "Content-Type: text/plain", resp_body);
-	close(connfd);
+	write_resp(*connfd, "200 OK", "Content-Type: text/plain", resp_body);
+	close(*connfd);
 }
 
 /* Temporary */
@@ -236,6 +244,7 @@ int main(void)
 	int sockfd, addr_len;
 	struct sockaddr_in servaddr, cli;
 	t_work_queue_t *work_queue;
+	int connfd;
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1) 
@@ -244,18 +253,19 @@ int main(void)
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_port = htons(8080);
-
-	if ((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0) 
+	if ((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0)
 		exit(1);
 	t_pool_create(&work_queue);
-	if (listen(sockfd, 10) < 0) 
+	if (listen(sockfd, 4) < 0) 
 		exit(1);
+
 	addr_len = sizeof(cli);
 	create_htable(&ht);
 	htable_insert(ht, "Hello", "World");
-
+	
 	while (keep_serving) {
-		t_work_new(work_queue, handle_req, accept(sockfd, (struct sockaddr *)&cli, &addr_len));
+		connfd = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
+		t_work_new(work_queue, handle_req, &connfd);
 	}
 
 	t_pool_wait(work_queue);
