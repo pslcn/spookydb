@@ -1,5 +1,7 @@
 # SpookyDB
 
+Shell scripts with curl commands are in `test/`. `test/curl-gets.sh` does not require hash tables to be working perfectly. 
+
 ## Client-Side Usage
 
 Putting 'avalue' in 'akey':

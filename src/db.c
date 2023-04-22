@@ -212,6 +212,7 @@ void handle_req(int *connfd)
 	}
 	write_resp(*connfd, "200 OK", "Content-Type: text/plain", resp_body);
 	close(*connfd);
+	*connfd = 0; /* Reset connfd to indicate availability */
 }
 
 /* Temporary */
@@ -241,10 +242,12 @@ start_daemon(void)
 int main(void)
 {
 	// start_daemon();
-	int sockfd, addr_len;
-	struct sockaddr_in servaddr, cli;
+	
+	int sockfd, addr_len[3];
+	struct sockaddr_in servaddr, cli[3];
 	t_work_queue_t *work_queue;
-	int connfd;
+	int connfd[3] = {0};
+	int conn_idx, i;
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1) 
@@ -256,16 +259,30 @@ int main(void)
 	if ((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0)
 		exit(1);
 	t_pool_create(&work_queue);
-	if (listen(sockfd, 4) < 0) 
+	if (listen(sockfd, 8) < 0) 
 		exit(1);
 
-	addr_len = sizeof(cli);
+	for (i = 0; i <= LENGTH(addr_len); ++i) 
+		addr_len[i] = sizeof(cli[i]);
 	create_htable(&ht);
 	htable_insert(ht, "Hello", "World");
 	
 	while (keep_serving) {
-		connfd = accept(sockfd, (struct sockaddr *)&cli, &addr_len);
-		t_work_new(work_queue, handle_req, &connfd);
+		/* Check connfd availability; handle_req resets connfd after closing socket */
+		for	(conn_idx = 0; conn_idx <= LENGTH(connfd); ++conn_idx) {
+			printf("connfd[%d]: %d\n", conn_idx, connfd[conn_idx]);
+			if (connfd[conn_idx] == 0) {
+				connfd[conn_idx] = accept(sockfd, (struct sockaddr *)&cli[conn_idx], &addr_len[conn_idx]);
+				if (connfd[conn_idx] < 0) {
+					close(connfd[conn_idx]);
+					connfd[conn_idx] = 0;
+					continue;
+				}
+
+				t_work_new(work_queue, handle_req, &connfd[conn_idx]); /* handle_req closes conn_fd when fininshed */
+				continue;
+			}
+		}
 	}
 
 	t_pool_wait(work_queue);
