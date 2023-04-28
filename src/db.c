@@ -142,6 +142,28 @@ void write_resp(int connfd, char status[], char resp_headers[], char resp_body[]
 
 htable_t *ht;
 
+int read_n_req_bytes(int connfd, char *buff, size_t n)
+{
+	ssize_t read_values;
+	while (n > 0) {
+		read_values = read(connfd, buff, n);
+		if (read_values <= 0) 
+			return -1;
+		n -= (size_t)read_values;
+		buff += read_values;
+	}
+	return 0;
+}
+
+/*
+void parse_req(int connfd)
+{
+	char rbuff[4 + BUFFSIZE + 1];
+	uint32_t len = 0;
+	read_n_req_bytes(connfd, rbuff, 4);
+}
+*/
+
 void parse_req(char *req, char *r_method[], char *r_path[], char *r_body[])
 {
 	char rm[2048], rp[2048], rb[2048];
