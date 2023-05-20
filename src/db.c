@@ -67,9 +67,51 @@ static int create_serv_sock(int *serv_fd, struct sockaddr_in *servaddr)
 	return 0;
 }
 
-static void handle_conn(fd_buff_struct_t *fd_conn)
+static void handle_res(fd_buff_struct_t *fd_conn)
 {
+	ssize_t rv = write(fd_conn->fd, &fd_conn->wbuff[fd_conn->wbuff_sent], fd_conn->wbuff_size - fd_conn->wbuff_sent);
+
 	fd_conn->state = STATE_END;
+}
+
+static void handle_req(fd_buff_struct_t *fd_conn)
+{
+	ssize_t rv = 0;
+
+	while (1) {
+		do {
+			rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], sizeof(fd_conn->rbuff) - fd_conn->rbuff_size);
+		} while (rv < 0 && errno == EINTR);
+
+		if (rv < 0 && errno == EAGAIN)
+			break;
+
+		if (rv < 0) {
+			fd_conn->state = STATE_END;
+			break;
+		}
+		
+		fd_conn->rbuff_size += (size_t)rv;
+
+		while (1) {
+			memcpy(&fd_conn->wbuff, &fd_conn->rbuff, 4);
+			fd_conn->wbuff_size = 4;
+
+			size_t remain = fd_conn->rbuff_size - 4;
+			if (remain) 
+				memmove(fd_conn->rbuff, &fd_conn->rbuff[4], remain);
+			fd_conn->rbuff_size = remain;
+			
+			fd_conn->state = STATE_RES;
+			handle_res(fd_conn);
+
+			if (fd_conn->state != STATE_REQ)
+				break;
+		}
+
+		if (fd_conn->state != STATE_REQ)
+			break;
+	}
 }
 
 static void serv_accept_connection(int serv_fd, fd_buff_struct_t *net_fd_buffs, size_t net_fd_buffs_size) 
@@ -138,7 +180,11 @@ int main(void)
 			/* Check active connections */
 			for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
 				if (net_fds[i].fd > 0 && net_fds[i].revents) {
-					handle_conn(&net_fd_buffs[i - 1]);
+					/* Handle connection */
+					if (net_fd_buffs[i - 1].state == STATE_REQ)
+						handle_req(&net_fd_buffs[i - 1]);
+					else if (net_fd_buffs[i - 1].state == STATE_RES)
+						handle_res(&net_fd_buffs[i - 1]);
 
 					/* Clean up array */
 					if (net_fd_buffs[i - 1].fd > 0 && net_fd_buffs[i - 1].state == STATE_END) {
@@ -169,6 +215,7 @@ int main(void)
 		if (net_fd_buffs[i].fd >= 0) 
 			close(net_fd_buffs[i].fd);
 	}
+
 	free(net_fd_buffs);
 
 	return 0;
