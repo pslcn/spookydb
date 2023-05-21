@@ -23,6 +23,153 @@
 
 #define RESP_LEN 1024
 
+#define CAPACITY 50000
+
+typedef struct {
+	char *key, *value;
+	size_t key_size, value_size;
+} ht_item_t;
+
+typedef struct {
+	ht_item_t **items;
+	int size, count;
+} htable_t;
+
+static void hash_func(unsigned long *hash, char *str) 
+{
+	unsigned long i = 0;
+
+	for (size_t j = 0; str[j]; ++j) 
+		i += str[j];
+	*hash = i % CAPACITY; 
+}
+
+static void create_ht_item(ht_item_t **item, char *key, char *value)
+{
+	*item = malloc(sizeof(ht_item_t));
+	(*item)->key = malloc(sizeof(char) * (strlen(key) + 1));
+	(*item)->value = malloc(sizeof(char) * (strlen(value) + 1));
+	strncpy((*item)->key, key, strlen(key));
+	strncpy((*item)->value, value, strlen(value));
+
+	(*item)->key_size = sizeof(char) * (strlen(key) + 1);
+	(*item)->value_size = sizeof(char) * (strlen(value) + 1);
+
+	fprintf(stdout, "(create_ht_item) Created ht_item_t at %p\n", *item);
+	fprintf(stdout, "(create_ht_item) Key '%s' in %d bytes at %p\n", (*item)->key, (*item)->key_size, (*item)->key);
+	fprintf(stdout, "(create_ht_item) Value '%s' in %d bytes at %p\n", (*item)->value, (*item)->value_size, (*item)->value);
+}
+
+static void create_htable(htable_t **table)
+{
+	int i;
+	*table = malloc(sizeof(htable_t));
+	(*table)->size = CAPACITY;
+	(*table)->count = 0;
+	(*table)->items = calloc((*table)->size, sizeof(ht_item_t*));
+	for (i = 0; i < (*table)->size; ++i)
+		(*table)->items[i] = NULL;
+}
+
+static void free_ht_item(ht_item_t *item)
+{
+	free(item->key);
+	free(item->value);
+	free(item);
+}
+
+static void free_htable(htable_t *table)
+{
+	ht_item_t *item;
+	int i;
+	for (i = 0; i < table->size; ++i) {
+		item = table->items[i];
+		if (item != NULL)
+			free_ht_item(item);
+	}
+	free(table->items);
+	free(table);
+}
+
+static void handle_ht_collision(htable_t *table, ht_item_t *item)
+{
+	fprintf(stdout, "Collision!\n");
+}
+
+static void htable_insert(htable_t *table, char *key, char *value)
+{
+	fprintf(stdout, "(htable_insert) Inserting value '%s' in key '%s'\n", value, key);
+	ht_item_t *item, *current;
+	unsigned long idx;
+	create_ht_item(&item, key, value);
+	fprintf(stdout, "(htable_insert) ht_item_t pointer is %p\n", item);
+	hash_func(&idx, key);
+	current = table->items[idx];
+	fprintf(stdout, "(htable_insert) current pointer is %p\n", current);
+	if (current == NULL) {
+		if (table->count == table->size) {
+			fprintf(stdout, "Table is full!\n");
+			free_ht_item(item);
+			return;
+		}
+		fprintf(stdout, "(htable_insert) Storing item at %p in table->items[%d]\n", item, idx);
+		table->items[idx] = item;
+		table->count++;
+
+	} else if (strncmp(current->key, key, strlen(key)) == 0) {
+		strncpy(table->items[idx]->value, value, strlen(value));
+	} else {
+		handle_ht_collision(table, item);
+	}
+}
+
+static int htable_remove(htable_t *table, char *key)
+{
+	unsigned long idx;
+	ht_item_t *current;
+	hash_func(&idx, key);
+	current = table->items[idx];
+
+	fprintf(stdout, "Deleting key '%s' at %p\n", key, current);
+
+	if ((current != NULL) && (strncmp(current->key, key, strlen(key)) == 0)) {
+		table->items[idx] = NULL;
+		table->count--;
+		free_ht_item(current);
+		return 0;
+	} else 
+		return 1;
+}
+
+static char *htable_search(htable_t *table, char *key) 
+{
+	unsigned long idx;
+	ht_item_t *item;
+
+	hash_func(&idx, key);
+	item = table->items[idx];
+
+	fprintf(stdout, "Searching %p in table->items[%d] for key '%s'\n", item, idx, key);
+
+	if (item == NULL)
+		return NULL;
+
+	fprintf(stdout, "Has key with %d bytes\n", item->key_size);
+	fprintf(stdout, "Has value with %d bytes\n", item->value_size);
+
+	if ((item->key_size > 0) && (item->value_size > 0)) {
+		fprintf(stdout, "Searching key at %p\n", item->key);
+
+		if (strncmp(item->key, key, strlen(key)) == 0) {
+			fprintf(stdout, "Found value '%s' in key '%s'\n", item->value, item->key);
+
+			return item->value;
+		} 
+	}
+
+	return NULL;
+}
+
 enum {
 	STATE_REQ = 0,
 	STATE_RES = 1,
@@ -179,6 +326,8 @@ static void write_resp(char *resp, char *status, char *resp_headers, char *resp_
 	resp[resp_num_chars] = '\0';
 }
 
+static htable_t *ht;
+
 static void handle_req(fd_buff_struct_t *fd_conn)
 {
 	ssize_t rv = 0;
@@ -190,17 +339,30 @@ static void handle_req(fd_buff_struct_t *fd_conn)
 	fd_conn->rbuff_size += (size_t)rv;
 
 	parse_req(&fd_conn->rbuff, &fd_conn->req_method, &fd_conn->req_path, &fd_conn->req_body, fd_conn->rbuff_size);
-	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", fd_conn->req_method, fd_conn->req_path, &fd_conn->req_body);
+	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", fd_conn->req_method, fd_conn->req_path, fd_conn->req_body);
 
 	/* Handle request method */
 	char resp[RESP_LEN];
 
+	/* &fd_conn->req_path[1] excludes '/' */
 	if (strncmp(fd_conn->req_method, "GET", 4) == 0) {
-		write_resp(&resp, "200 OK", "Content-Type: text/plain", "GET!\n");
+		char *value_pointer = htable_search(ht, &fd_conn->req_path[1]), *resp_body;
+
+		if (value_pointer != NULL) {
+			resp_body = value_pointer;
+		} else {
+			resp_body = "NULL\n";
+		}
+
+		write_resp(&resp, "200 OK", "Content-Type: text/plain", resp_body);
+
 	} else if (strncmp(fd_conn->req_method, "PUT", 4) == 0) {
-		write_resp(&resp, "200 OK", "Content-Type: text/plain", "PUT!\n");
+		htable_insert(ht, &fd_conn->req_path[1], fd_conn->req_body);
+		write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
+
 	} else if (strncmp(fd_conn->req_method, "DELETE", 7) == 0) {
-		write_resp(&resp, "200 OK", "Content-Type: text/plain", "DELETE!\n");
+		htable_remove(ht, &fd_conn->req_path[1]); 
+		write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
 	}
 
 	size_t resp_bytes = 0;
@@ -264,6 +426,9 @@ int main(void)
 	net_fds[0].fd = serv_fd;
 	net_fds[0].events = POLLIN;
 
+	create_htable(&ht);
+	htable_insert(ht, "Hello", "World");
+
 	/* Event loop */
 	while (1) {
 		nfds = 1;
@@ -321,6 +486,8 @@ int main(void)
 	}
 
 	free(net_fd_buffs);
+	
+	free_htable(ht);
 
 	return 0;
 }
