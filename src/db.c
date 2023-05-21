@@ -412,8 +412,30 @@ static void serv_accept_connection(int serv_fd, fd_buff_struct_t *net_fd_buffs, 
 }
 
 /* Event loop uses poll.h */
-int main(void)
+int main(int argc, char *argv[])
 {
+	/* Command line options */
+	if (!(argc > 1))
+		exit(1);
+
+	int option;
+	char *log_file_path = NULL;
+
+	while ((option = getopt(argc, argv, ":l:")) != -1) {
+		switch (option) {
+			case 'l':
+				log_file_path = optarg;
+				break;
+			case ':':
+				exit(1);
+			default: 
+				exit(1);
+		}
+	}
+
+	if (log_file_path != NULL)
+		fprintf(stdout, "Logging to '%s'\n", log_file_path);
+
 	int serv_fd;
 	struct sockaddr_in servaddr;
 
