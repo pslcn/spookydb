@@ -102,10 +102,9 @@ static void htable_insert(htable_t *table, char *key, char *value)
 	ht_item_t *item, *current;
 	unsigned long idx;
 	create_ht_item(&item, key, value);
-	fprintf(stdout, "(htable_insert) ht_item_t pointer is %p\n", item);
 	hash_func(&idx, key);
+	fprintf(stdout, "(htable_insert) ht_item_t pointer is %p\n", item);
 	current = table->items[idx];
-	fprintf(stdout, "(htable_insert) current pointer is %p\n", current);
 	if (current == NULL) {
 		if (table->count == table->size) {
 			fprintf(stdout, "Table is full!\n");
@@ -149,19 +148,19 @@ static char *htable_search(htable_t *table, char *key)
 	hash_func(&idx, key);
 	item = table->items[idx];
 
-	fprintf(stdout, "Searching %p in table->items[%d] for key '%s'\n", item, idx, key);
+	fprintf(stdout, "(htable_search) Searching %p in table->items[%d] for key '%s'\n", item, idx, key);
 
 	if (item == NULL)
 		return NULL;
 
-	fprintf(stdout, "Has key with %d bytes\n", item->key_size);
-	fprintf(stdout, "Has value with %d bytes\n", item->value_size);
+	fprintf(stdout, "(htable_search) Has key with %d bytes\n", item->key_size);
+	fprintf(stdout, "(htable_search) Has value with %d bytes\n", item->value_size);
 
 	if ((item->key_size > 0) && (item->value_size > 0)) {
-		fprintf(stdout, "Searching key at %p\n", item->key);
+		fprintf(stdout, "(htable_search) Searching key at %p\n", item->key);
 
 		if (strncmp(item->key, key, strlen(key)) == 0) {
-			fprintf(stdout, "Found value '%s' in key '%s'\n", item->value, item->key);
+			fprintf(stdout, "(htable_search) Found value '%s' in key '%s'\n", item->value, item->key);
 
 			return item->value;
 		} 
@@ -415,6 +414,7 @@ static void serv_accept_connection(int serv_fd, fd_buff_struct_t *net_fd_buffs, 
 int main(int argc, char *argv[])
 {
 	/* Command line options */
+#if 0
 	if (!(argc > 1))
 		exit(1);
 
@@ -435,6 +435,7 @@ int main(int argc, char *argv[])
 
 	if (log_file_path != NULL)
 		fprintf(stdout, "Logging to '%s'\n", log_file_path);
+#endif
 
 	int serv_fd;
 	struct sockaddr_in servaddr;
