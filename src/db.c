@@ -149,7 +149,7 @@ int main(void)
 	int serv_fd;
 	struct sockaddr_in servaddr;
 
-	struct pollfd net_fds[NUM_CONNECTIONS - 1];
+	struct pollfd net_fds[NUM_CONNECTIONS];
 	size_t nfds = 1;
 	fd_buff_struct_t *net_fd_buffs = malloc(sizeof(fd_buff_struct_t) * NUM_CONNECTIONS);
 
@@ -206,14 +206,14 @@ int main(void)
 	}
 
 	/* Close FDs */
-	for (size_t i = 0; i < LENGTH(net_fds); ++i) {
-		if (net_fds[i].fd >= 0) 
-			close(net_fds[i].fd);
-	}
-
+	fprintf(stdout, "Closing listening socket FD %d\n", serv_fd);
+	close(serv_fd);
 	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-		if (net_fd_buffs[i].fd >= 0) 
+		if (net_fd_buffs[i].fd > 0) {
+			fprintf(stdout, "Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs[i].fd, i);
+
 			close(net_fd_buffs[i].fd);
+		}
 	}
 
 	free(net_fd_buffs);
