@@ -21,6 +21,8 @@
 #define BUFFSIZE 1024
 #define NUM_CONNECTIONS 32
 
+#define RESP_LEN 1024
+
 enum {
 	STATE_REQ = 0,
 	STATE_RES = 1,
@@ -33,6 +35,11 @@ typedef struct {
 
 	size_t rbuff_size;
 	uint8_t rbuff[BUFFSIZE];
+
+	/* Only supports GET, PUT, and DELETE; DELETE is 6 characters */
+	char req_method[8];
+	char req_path[BUFFSIZE];
+	char req_body[BUFFSIZE];
 
 	size_t wbuff_size;
 	size_t wbuff_sent;
@@ -69,49 +76,138 @@ static int create_serv_sock(int *serv_fd, struct sockaddr_in *servaddr)
 
 static void handle_res(fd_buff_struct_t *fd_conn)
 {
-	ssize_t rv = write(fd_conn->fd, &fd_conn->wbuff[fd_conn->wbuff_sent], fd_conn->wbuff_size - fd_conn->wbuff_sent);
+	fprintf(stdout, "Sending response of %d bytes to FD %d\n", fd_conn->wbuff_size, fd_conn->fd);
+	ssize_t rv = write(fd_conn->fd, &fd_conn->wbuff, fd_conn->wbuff_size);
 
 	fd_conn->state = STATE_END;
+}
+
+static void parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size)
+{
+	/* Number of spaces; whether string is request body */
+	int spaces = 0, isbody = 0;
+
+	for (size_t c = 0; c < content_buff_size; ++c) {
+		if (spaces == 0) {
+			if (req[c] != ' ') 
+				req_method[c] = req[c];	
+			else {
+				req_method[c] = '\0';
+				spaces = c + 1;
+			}
+		} else {
+			if (req[c] != ' ') 
+				req_path[c - spaces] = req[c];
+			else {
+				req_path[c - spaces] = '\0';
+				break;
+			}
+		}
+	}
+
+	/* Parse request body */
+	if (strncmp(req_method, "PUT", 4) == 0) {
+		for (size_t c = 0; c < content_buff_size; ++c) {
+			if (isbody == 0) {
+				if ((req[c] == '\n') && (req[c + 2] == '\n')) {
+					c += 2;
+					isbody = c + 1;
+				}
+			} else {
+				req_body[c - isbody] = req[c];
+			}
+		}
+	} else 
+		strncpy(req_body, "NULL", 5);	
+}
+
+static void write_resp(char *resp, char *status, char *resp_headers, char *resp_body)
+{
+	size_t resp_num_chars = 9;
+
+	strncpy(resp, "HTTP/1.1 ", resp_num_chars); /* Should not be null-terminated */
+
+	strncpy(&resp[resp_num_chars], status, strlen(status));
+	resp_num_chars += strlen(status);
+	resp[resp_num_chars] = '\n';
+	resp_num_chars += 1;
+	
+	strncpy(&resp[resp_num_chars], resp_headers, strlen(resp_headers));
+	resp_num_chars += strlen(resp_headers);
+	resp[resp_num_chars] = '\n';
+	resp_num_chars += 1;
+
+	strncpy(&resp[resp_num_chars], "Content-Length: ", 16); /* Should not be null-terminated */
+	resp_num_chars += 16;
+
+	/* Convert content length into string (ASCII) */
+	int int_content_length = strlen(resp_body);
+	char str_content_length[32];
+	for (size_t i = 0; i < 32; ++i) {
+		int curr = int_content_length % 10;
+
+		/* Getting ASCII code */
+		str_content_length[i] = '0' + curr;
+
+		int_content_length -= curr;
+		int_content_length /= 10;
+	}
+
+	/* Get number of digits */
+	int num_digits = 1;
+	for (size_t i = 31; i > 0; --i) {
+		if (str_content_length[i] != '0') {
+			num_digits = i + 1;
+			break;
+		}
+	}
+
+	/* Reverse digits */
+	char reversed_content_length[num_digits];
+	for (size_t i = 0; i < num_digits; ++i) {
+		reversed_content_length[i] = str_content_length[(num_digits - 1) - i];
+	}
+
+	strncpy(&resp[resp_num_chars], &reversed_content_length, num_digits);
+	resp_num_chars += num_digits;
+	strncpy(&resp[resp_num_chars], "\n\n", 2);
+	resp_num_chars += 2;
+
+	strncpy(&resp[resp_num_chars], resp_body, strlen(resp_body));
+	resp_num_chars += strlen(resp_body);
+	resp[resp_num_chars] = '\0';
 }
 
 static void handle_req(fd_buff_struct_t *fd_conn)
 {
 	ssize_t rv = 0;
 
-	while (1) {
-		do {
-			rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], sizeof(fd_conn->rbuff) - fd_conn->rbuff_size);
-		} while (rv < 0 && errno == EINTR);
+	do {
+		rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], sizeof(fd_conn->rbuff) - fd_conn->rbuff_size);
+	} while (rv < 0 && errno == EINTR);
 
-		if (rv < 0 && errno == EAGAIN)
+	fd_conn->rbuff_size += (size_t)rv;
+
+	parse_req(&fd_conn->rbuff, &fd_conn->req_method, &fd_conn->req_path, &fd_conn->req_body, fd_conn->rbuff_size);
+	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", fd_conn->req_method, fd_conn->req_path, &fd_conn->req_body);
+
+	/* Simple network response */
+	char resp[RESP_LEN];
+	write_resp(&resp, "200 OK", "Content-Type: text/plain", "Works!\n");
+
+	size_t resp_bytes = 0;
+	for (size_t i = 0; i < LENGTH(resp); ++i) {
+		if (resp[i] == '\0') {
+			resp_bytes = i;
 			break;
-
-		if (rv < 0) {
-			fd_conn->state = STATE_END;
-			break;
-		}
-		
-		fd_conn->rbuff_size += (size_t)rv;
-
-		while (1) {
-			memcpy(&fd_conn->wbuff, &fd_conn->rbuff, 4);
-			fd_conn->wbuff_size = 4;
-
-			size_t remain = fd_conn->rbuff_size - 4;
-			if (remain) 
-				memmove(fd_conn->rbuff, &fd_conn->rbuff[4], remain);
-			fd_conn->rbuff_size = remain;
-			
-			fd_conn->state = STATE_RES;
-			handle_res(fd_conn);
-
-			if (fd_conn->state != STATE_REQ)
-				break;
-		}
-
-		if (fd_conn->state != STATE_REQ)
-			break;
+		}	
 	}
+
+	memcpy(&fd_conn->wbuff, &resp, resp_bytes);
+	fd_conn->wbuff_size = resp_bytes;
+
+	fd_conn->state = STATE_RES;
+	handle_res(fd_conn);
 }
 
 static void serv_accept_connection(int serv_fd, fd_buff_struct_t *net_fd_buffs, size_t net_fd_buffs_size) 
