@@ -121,6 +121,7 @@ static void parse_req(char *req, char *req_method, char *req_path, char *req_bod
 		strncpy(req_body, "NULL", 5);	
 }
 
+/* Simple network responses */
 static void write_resp(char *resp, char *status, char *resp_headers, char *resp_body)
 {
 	size_t resp_num_chars = 9;
@@ -191,9 +192,16 @@ static void handle_req(fd_buff_struct_t *fd_conn)
 	parse_req(&fd_conn->rbuff, &fd_conn->req_method, &fd_conn->req_path, &fd_conn->req_body, fd_conn->rbuff_size);
 	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", fd_conn->req_method, fd_conn->req_path, &fd_conn->req_body);
 
-	/* Simple network response */
+	/* Handle request method */
 	char resp[RESP_LEN];
-	write_resp(&resp, "200 OK", "Content-Type: text/plain", "Works!\n");
+
+	if (strncmp(fd_conn->req_method, "GET", 4) == 0) {
+		write_resp(&resp, "200 OK", "Content-Type: text/plain", "GET!\n");
+	} else if (strncmp(fd_conn->req_method, "PUT", 4) == 0) {
+		write_resp(&resp, "200 OK", "Content-Type: text/plain", "PUT!\n");
+	} else if (strncmp(fd_conn->req_method, "DELETE", 7) == 0) {
+		write_resp(&resp, "200 OK", "Content-Type: text/plain", "DELETE!\n");
+	}
 
 	size_t resp_bytes = 0;
 	for (size_t i = 0; i < LENGTH(resp); ++i) {
