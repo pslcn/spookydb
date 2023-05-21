@@ -221,6 +221,8 @@ static int create_serv_sock(int *serv_fd, struct sockaddr_in *servaddr)
 	return 0;
 }
 
+/* ("tid=%p", pthread_self()) */
+
 static void handle_res(fd_buff_struct_t *fd_conn)
 {
 	fprintf(stdout, "Sending response of %d bytes to FD %d\n", fd_conn->wbuff_size, fd_conn->fd);
