@@ -62,12 +62,12 @@ static void create_ht_item(ht_item_t **item, char *key, char *value)
 
 static void create_htable(htable_t **table)
 {
-	int i;
 	*table = malloc(sizeof(htable_t));
 	(*table)->size = CAPACITY;
 	(*table)->count = 0;
 	(*table)->items = calloc((*table)->size, sizeof(ht_item_t*));
-	for (i = 0; i < (*table)->size; ++i)
+
+	for (size_t i = 0; i < (*table)->size; ++i)
 		(*table)->items[i] = NULL;
 }
 
@@ -81,8 +81,7 @@ static void free_ht_item(ht_item_t *item)
 static void free_htable(htable_t *table)
 {
 	ht_item_t *item;
-	int i;
-	for (i = 0; i < table->size; ++i) {
+	for (size_t i = 0; i < table->size; ++i) {
 		item = table->items[i];
 		if (item != NULL)
 			free_ht_item(item);
@@ -186,6 +185,9 @@ typedef struct {
 	char req_method[8];
 	char req_path[BUFFSIZE];
 	char req_body[BUFFSIZE];
+
+	size_t file_buff_size;
+	uint8_t file_buff[BUFFSIZE];
 
 	size_t wbuff_size;
 	size_t wbuff_sent;
@@ -328,6 +330,17 @@ static void write_resp(char *resp, char *status, char *resp_headers, char *resp_
 }
 
 static htable_t *ht;
+
+static void ftp_read(fd_buff_struct_t *fd_conn)
+{
+	ssize_t rv = 0;
+
+	rv = recv(fd_conn->fd, &fd_conn->file_buff[fd_conn->file_buff_size], sizeof(fd_conn->file_buff) - fd_conn->file_buff_size, 0);	
+
+	fd_conn->file_buff_size += (size_t)rv;
+
+	char *filename; 
+}
 
 static void handle_req(fd_buff_struct_t *fd_conn)
 {

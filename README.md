@@ -21,3 +21,11 @@ Getting value in 'akey' (now should be NULL):
 ```bash
 curl --http0.9 localhost:8080/akey
 ```
+
+## Uploading With FTP
+
+```bash
+Putting 'file.txt' in 'here':
+
+curl -T 'file.txt' ftp://localhost:8080/here
+```
