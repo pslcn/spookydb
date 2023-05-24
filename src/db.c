@@ -331,17 +331,6 @@ static void write_resp(char *resp, char *status, char *resp_headers, char *resp_
 
 static htable_t *ht;
 
-static void ftp_read(fd_buff_struct_t *fd_conn)
-{
-	ssize_t rv = 0;
-
-	rv = recv(fd_conn->fd, &fd_conn->file_buff[fd_conn->file_buff_size], sizeof(fd_conn->file_buff) - fd_conn->file_buff_size, 0);	
-
-	fd_conn->file_buff_size += (size_t)rv;
-
-	char *filename; 
-}
-
 static void handle_req(fd_buff_struct_t *fd_conn)
 {
 	ssize_t rv = 0;
@@ -464,6 +453,8 @@ int main(int argc, char *argv[])
 	net_fds[0].fd = serv_fd;
 	net_fds[0].events = POLLIN;
 
+	/* FTP on ports 20 and 21 */
+
 	create_htable(&ht);
 	htable_insert(ht, "Hello", "World");
 
@@ -509,6 +500,11 @@ int main(int argc, char *argv[])
 			if (net_fds[0].revents & POLLIN) {
 				serv_accept_connection(serv_fd, net_fd_buffs, NUM_CONNECTIONS);
 			}
+		}
+
+		/* Handle FTP server */
+		if (ftp_parsed_poll_ports() > 0) {
+				
 		}
 	}
 
