@@ -40,14 +40,6 @@ typedef struct {
 	size_t port_20_buffs_size;
 } ftp_ports_t;
 
-/* Concurrency management with poll.h */
-int ftp_poll_ports(ftp_ports_t *ftp_handler)
-{
-	size_t nfds = 1;
-
-	return 0;
-}
-
 static int fd_set_non_blocking(int fd)
 {
 	int flags = fcntl(fd, F_GETFL, 0);
@@ -65,14 +57,11 @@ static int create_sock(int *sock_fd, struct sockaddr_in *servaddr, int port)
 		return 1;
 	fd_set_non_blocking(*sock_fd);
 
-	fprintf(stdout, "(create_sock) Created non-blocking socket at %p\n", sock_fd);
-
 	bzero(servaddr, sizeof(*servaddr));
 	servaddr->sin_family = AF_INET;
 	servaddr->sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr->sin_port = htons(port);
 
-	fprintf(stdout, "(create_sock) Assigning socket address at %p to socket\n", servaddr);
 	if ((bind(*sock_fd, (struct sockaddr *)servaddr, sizeof(*servaddr))) != 0) {
 		if (errno == EADDRINUSE)
 			fprintf(stdout, "Address already in use\n");
@@ -88,40 +77,44 @@ static int create_sock(int *sock_fd, struct sockaddr_in *servaddr, int port)
 }
 
 /* Concurrency management with poll.h */
-int create_ftp_handler(ftp_ports_t *ftp_handler)
+int create_ftp_handler(ftp_ports_t **ftp_handler)
 {
-	ftp_handler = malloc(sizeof(ftp_ports_t));
-	fprintf(stdout, "(create_ftp_handler) ftp_handler created at %p\n", ftp_handler);
+	*ftp_handler = malloc(sizeof(ftp_ports_t));
+	fprintf(stdout, "(create_ftp_handler) ftp_handler created at %p\n", *ftp_handler);
 
 	/* Communication on port 21; data transfer on port 20 */
-	fprintf(stdout, "(create_ftp_handler) Creating port 20 socket at %p\n", &(ftp_handler->serv_fd_20));
-	if (create_sock(&(ftp_handler->serv_fd_20), &(ftp_handler->servaddr_20), 20) != 0)
+	fprintf(stdout, "(create_ftp_handler) Creating port 20 socket at %p\n", &((*ftp_handler)->serv_fd_20));
+	if (create_sock(&((*ftp_handler)->serv_fd_20), &((*ftp_handler)->servaddr_20), 20) != 0)
 		return 1;
 
-	fprintf(stdout, "(create_ftp_handler) Creating port 21 socket at %p\n", &(ftp_handler->serv_fd_21));
-	if (create_sock(&(ftp_handler->serv_fd_21), &(ftp_handler->servaddr_21), 21) != 0)
+	fprintf(stdout, "(create_ftp_handler) Creating port 21 socket at %p\n", &((*ftp_handler)->serv_fd_21));
+	if (create_sock(&((*ftp_handler)->serv_fd_21), &((*ftp_handler)->servaddr_21), 21) != 0)
 		return 1;
 
-	if (listen(ftp_handler->serv_fd_20, (int)(NUM_CONNECTIONS / 2)) < 0)
+	if (listen((*ftp_handler)->serv_fd_20, (int)(NUM_CONNECTIONS / 2)) < 0)
 		return 1;
-	if (listen(ftp_handler->serv_fd_21, (int)(NUM_CONNECTIONS / 2)) < 0)
+	if (listen((*ftp_handler)->serv_fd_21, (int)(NUM_CONNECTIONS / 2)) < 0)
 		return 1;
 
-	ftp_handler->port_21_fds = calloc(NUM_CONNECTIONS, sizeof(struct pollfd *));
-	ftp_handler->port_20_fds = calloc(NUM_CONNECTIONS, sizeof(struct pollfd *));
-	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-		ftp_handler->port_21_fds[i] = malloc(sizeof(struct pollfd));
-		ftp_handler->port_20_fds[i] = malloc(sizeof(struct pollfd));
-	}
+	(*ftp_handler)->port_21_fds_size = NUM_CONNECTIONS;
+	(*ftp_handler)->port_20_fds_size = NUM_CONNECTIONS;
 
-	ftp_handler->port_21_fds_size = NUM_CONNECTIONS;
-	ftp_handler->port_20_fds_size = NUM_CONNECTIONS;
+	(*ftp_handler)->port_21_fds = calloc((*ftp_handler)->port_21_fds_size, sizeof(struct pollfd *));
+	(*ftp_handler)->port_20_fds = calloc((*ftp_handler)->port_20_fds_size, sizeof(struct pollfd *));
+	fprintf(stdout, "(create_ftp_handler) port_21_fds created at %p with size %d\n", (*ftp_handler)->port_21_fds, (*ftp_handler)->port_21_fds_size);
+	fprintf(stdout, "(create_ftp_handler) port_20_fds created at %p\n", (*ftp_handler)->port_20_fds, (*ftp_handler)->port_20_fds_size);
 
-	ftp_handler->port_21_fds[0]->fd = ftp_handler->serv_fd_21;
-	ftp_handler->port_21_fds[0]->events = POLLIN;
+	for (size_t i = 0; i < (*ftp_handler)->port_21_fds_size; ++i) 
+		(*ftp_handler)->port_21_fds[i] = malloc(sizeof(struct pollfd));
+	for (size_t i = 0; i < (*ftp_handler)->port_20_fds_size; ++i) 
+		(*ftp_handler)->port_20_fds[i] = malloc(sizeof(struct pollfd));
 
-	ftp_handler->port_20_buffs = malloc(sizeof(port_buff_struct_t) * NUM_CONNECTIONS);
-	ftp_handler->port_21_buffs = malloc(sizeof(port_buff_struct_t) * NUM_CONNECTIONS);
+	(*ftp_handler)->port_21_fds[0]->fd = (*ftp_handler)->serv_fd_21;
+	(*ftp_handler)->port_21_fds[0]->events = POLLIN;
+	fprintf(stdout, "(create_ftp_handler) Stored serv_fd_21 at %p\n", (*ftp_handler)->port_21_fds[0]);
+
+	(*ftp_handler)->port_20_buffs = malloc(sizeof(port_buff_struct_t) * NUM_CONNECTIONS);
+	(*ftp_handler)->port_21_buffs = malloc(sizeof(port_buff_struct_t) * NUM_CONNECTIONS);
 
 	return 0;
 }
@@ -133,9 +126,6 @@ int close_ftp_handler(ftp_ports_t *ftp_handler)
 
 	fprintf(stdout, "Closing ftp_handler at %p\n", ftp_handler);
 
-	if (ftp_handler->serv_fd_21 > 0) 
-		close(ftp_handler->serv_fd_21);
-
 	if (ftp_handler->port_21_fds != NULL) {
 		fprintf(stdout, "(close_ftp_handler) port_21_fds are at %p\n", ftp_handler->port_21_fds);
 
@@ -143,12 +133,13 @@ int close_ftp_handler(ftp_ports_t *ftp_handler)
 			if (ftp_handler->port_21_fds[i] == NULL)
 				continue;
 
-			fprintf(stdout, "ftp_handler->port_21_fds[%d]: %p\n", i, ftp_handler->port_21_fds[i]);
+			/*
+			fprintf(stdout, "ftp_handler->port_21_fds[%d]: %d at %p\n", i, ftp_handler->port_21_fds[i]->fd, ftp_handler->port_21_fds[i]); 
+			*/
 
 			if (ftp_handler->port_21_fds[i]->fd > 0) 
 				close(ftp_handler->port_21_fds[i]->fd);
 
-			fprintf(stdout, "Freeing %p\n", ftp_handler->port_21_fds[i]);
 			free(ftp_handler->port_21_fds[i]);	
 		}
 
@@ -159,8 +150,13 @@ int close_ftp_handler(ftp_ports_t *ftp_handler)
 		fprintf(stdout, "(close_ftp_handler) port_20_fds are at %p\n", ftp_handler->port_20_fds);
 
 		for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-			if (ftp_handler->port_20_fds[i] != NULL)
-				free(ftp_handler->port_20_fds[i]);
+			if (ftp_handler->port_20_fds[i] == NULL)
+				continue;
+
+			if (ftp_handler->port_20_fds[i]->fd > 0)
+				close(ftp_handler->port_20_fds[i]->fd);
+
+			free(ftp_handler->port_20_fds[i]);
 		}
 
 		free(ftp_handler->port_20_fds);
@@ -171,6 +167,21 @@ int close_ftp_handler(ftp_ports_t *ftp_handler)
 	if (ftp_handler->port_20_buffs != NULL)
 		free(ftp_handler->port_20_buffs);
 
+	free(ftp_handler);
+
+	return 0;
+}
+
+/* Concurrency management with poll.h */
+int ftp_poll_ports(ftp_ports_t *ftp_handler)
+{
+	size_t nfds = 1;
+
+	/*
+	ftp_handler->port_21_fds[0]->fd = 0;
+	ftp_handler->port_21_fds[0]->events = POLLIN;
+	*/
+
 	return 0;
 }
 
@@ -178,17 +189,18 @@ int close_ftp_handler(ftp_ports_t *ftp_handler)
 #if 1
 int main(void)
 {
-	ftp_ports_t ftp_handler;
+	ftp_ports_t *ftp_handler;
 
-	if (create_ftp_handler(&ftp_handler) != 0)
-		exit(1);
+	create_ftp_handler(&ftp_handler);
 
+	/*
 	while (1) {
 		fprintf(stdout, "ftp_poll_ports: %d\n", ftp_poll_ports(&ftp_handler));
 		break;
 	}
+	*/
 
-	close_ftp_handler(&ftp_handler);
+	close_ftp_handler(ftp_handler);
 
 	return 0;
 }

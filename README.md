@@ -31,3 +31,9 @@ curl -T 'file.txt' ftp://localhost:8080/here
 ```
 
 Processes require root privileges to bind to ports below 1024, meaning the FTP server may get EACCES errors when attempting to bind to ports 20 and 21. The `test/root_build.sh` script can be run on the ftp binary, which can then be run as user.
+
+Thus, `src/ftp_ports.c` can be tested in the following way: 
+
+```bash
+gcc src/ftp_ports.c -o bin/ftp && ./test/root_build.sh bin/ftp
+```
