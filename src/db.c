@@ -16,6 +16,8 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
+#include "nb_fd_io.h"
+
 #define LENGTH(X) (sizeof X / sizeof X[0])
 
 #define BUFFSIZE 1024
@@ -168,12 +170,6 @@ static char *htable_search(htable_t *table, char *key)
 	return NULL;
 }
 
-enum {
-	STATE_REQ = 0,
-	STATE_RES = 1,
-	STATE_END = 2,
-};
-
 typedef struct {
 	int fd;
 	uint32_t state;
@@ -194,34 +190,6 @@ typedef struct {
 	uint8_t wbuff[BUFFSIZE];
 } fd_buff_struct_t;
 
-static int fd_set_non_blocking(int fd)
-{
-	int flags = fcntl(fd, F_GETFL, 0);
-	if (flags == -1)
-		return 1;
-	flags |= O_NONBLOCK;
-
-	return (fcntl(fd, F_SETFL, flags) == 0) ? 0 : 1;
-}
-
-/* Non-blocking server socket FD */
-static int create_serv_sock(int *serv_fd, struct sockaddr_in *servaddr) 
-{
-	*serv_fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (*serv_fd == -1)
-		return 1;
-	fd_set_non_blocking(*serv_fd);
-
-	bzero(servaddr, sizeof(*servaddr));
-	(*servaddr).sin_family = AF_INET;
-	(*servaddr).sin_addr.s_addr = htonl(INADDR_ANY);
-	(*servaddr).sin_port = htons(8080);
-	if ((bind(*serv_fd, (struct sockaddr *)servaddr, sizeof(*servaddr))) != 0)
-		return 1;
-
-	return 0;
-}
-
 /* ("tid=%p", pthread_self()) */
 
 static void handle_res(fd_buff_struct_t *fd_conn)
@@ -232,7 +200,7 @@ static void handle_res(fd_buff_struct_t *fd_conn)
 	fd_conn->state = STATE_END;
 }
 
-static void parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size)
+static void http_parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size)
 {
 	/* Number of spaces; whether string is request body */
 	int spaces = 0, isbody = 0;
@@ -272,7 +240,7 @@ static void parse_req(char *req, char *req_method, char *req_path, char *req_bod
 }
 
 /* Simple network responses */
-static void write_resp(char *resp, char *status, char *resp_headers, char *resp_body)
+static void http_write_resp(char *resp, char *status, char *resp_headers, char *resp_body)
 {
 	size_t resp_num_chars = 9;
 
@@ -331,7 +299,7 @@ static void write_resp(char *resp, char *status, char *resp_headers, char *resp_
 
 static htable_t *ht;
 
-static void handle_req(fd_buff_struct_t *fd_conn)
+static void http_handle_req(fd_buff_struct_t *fd_conn)
 {
 	ssize_t rv = 0;
 
@@ -341,7 +309,7 @@ static void handle_req(fd_buff_struct_t *fd_conn)
 
 	fd_conn->rbuff_size += (size_t)rv;
 
-	parse_req(&fd_conn->rbuff, &fd_conn->req_method, &fd_conn->req_path, &fd_conn->req_body, fd_conn->rbuff_size);
+	http_parse_req(&fd_conn->rbuff, &fd_conn->req_method, &fd_conn->req_path, &fd_conn->req_body, fd_conn->rbuff_size);
 	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", fd_conn->req_method, fd_conn->req_path, fd_conn->req_body);
 
 	/* Handle request method */
@@ -357,15 +325,15 @@ static void handle_req(fd_buff_struct_t *fd_conn)
 			resp_body = "NULL\n";
 		}
 
-		write_resp(&resp, "200 OK", "Content-Type: text/plain", resp_body);
+		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", resp_body);
 
 	} else if (strncmp(fd_conn->req_method, "PUT", 4) == 0) {
 		htable_insert(ht, &fd_conn->req_path[1], fd_conn->req_body);
-		write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
+		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
 
 	} else if (strncmp(fd_conn->req_method, "DELETE", 7) == 0) {
 		htable_remove(ht, &fd_conn->req_path[1]); 
-		write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
+		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
 	}
 
 	size_t resp_bytes = 0;
@@ -446,7 +414,7 @@ int main(int argc, char *argv[])
 	size_t nfds = 1;
 	fd_buff_struct_t *net_fd_buffs = malloc(sizeof(fd_buff_struct_t) * NUM_CONNECTIONS);
 
-	if (create_serv_sock(&serv_fd, &servaddr) != 0)
+	if (create_serv_sock(&serv_fd, &servaddr, 8080) != 0)
 		exit(1);
 	if (listen(serv_fd, (int)(NUM_CONNECTIONS / 2)) < 0)
 		exit(1);
@@ -480,7 +448,7 @@ int main(int argc, char *argv[])
 				if (net_fds[i].fd > 0 && net_fds[i].revents) {
 					/* Handle connection */
 					if (net_fd_buffs[i - 1].state == STATE_REQ)
-						handle_req(&net_fd_buffs[i - 1]);
+						http_handle_req(&net_fd_buffs[i - 1]);
 					else if (net_fd_buffs[i - 1].state == STATE_RES)
 						handle_res(&net_fd_buffs[i - 1]);
 

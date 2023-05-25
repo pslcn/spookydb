@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include "nb_fd_io.h"
+
 #define LENGTH(X) (sizeof X / sizeof X[0])
 
 #define BUFFSIZE 1024
@@ -39,42 +41,6 @@ typedef struct {
 	size_t port_20_buffs_size;
 } ftp_ports_t;
 
-static int fd_set_non_blocking(int fd)
-{
-	int flags = fcntl(fd, F_GETFL, 0);
-	if (flags == -1)
-		return 1;
-	flags |= O_NONBLOCK;
-
-	return (fcntl(fd, F_SETFL, flags) == 0) ? 0 : 1;
-}
-
-static int create_sock(int *sock_fd, struct sockaddr_in *servaddr, int port)
-{
-	*sock_fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (*sock_fd == -1)
-		return 1;
-	fd_set_non_blocking(*sock_fd);
-
-	bzero(servaddr, sizeof(*servaddr));
-	servaddr->sin_family = AF_INET;
-	servaddr->sin_addr.s_addr = htonl(INADDR_ANY);
-	servaddr->sin_port = htons(port);
-
-	if ((bind(*sock_fd, (struct sockaddr *)servaddr, sizeof(*servaddr))) != 0) {
-		if (errno == EADDRINUSE)
-			fprintf(stdout, "Address already in use\n");
-		
-		/* Running as root fixes */
-		else if (errno == EACCES)
-			fprintf(stdout, "Error\n");
-
-		return 1;
-	}
-
-	return 0;
-}
-
 /* Concurrency management with poll.h; port 20 and port 21 are served on separate threads */
 int create_ftp_handler(ftp_ports_t **ftp_handler)
 {
@@ -83,11 +49,11 @@ int create_ftp_handler(ftp_ports_t **ftp_handler)
 
 	/* Communication on port 21; data transfer on port 20 */
 	fprintf(stdout, "%p: port 20 socket\n", &((*ftp_handler)->serv_fd_20));
-	if (create_sock(&((*ftp_handler)->serv_fd_20), &((*ftp_handler)->servaddr_20), 20) != 0)
+	if (create_serv_sock(&((*ftp_handler)->serv_fd_20), &((*ftp_handler)->servaddr_20), 20) != 0)
 		return 1;
 
 	fprintf(stdout, "%p: port 21 socket\n", &((*ftp_handler)->serv_fd_21));
-	if (create_sock(&((*ftp_handler)->serv_fd_21), &((*ftp_handler)->servaddr_21), 21) != 0)
+	if (create_serv_sock(&((*ftp_handler)->serv_fd_21), &((*ftp_handler)->servaddr_21), 21) != 0)
 		return 1;
 
 	if (listen((*ftp_handler)->serv_fd_20, (int)(NUM_CONNECTIONS / 2)) < 0)
@@ -179,6 +145,7 @@ int ftp_poll_ports(ftp_ports_t *ftp_handler)
 {
 	size_t nfds = 1;
 
+	/*
 	for (size_t i = 1; i < ftp_handler->port_21_buffs_size; ++i) {
 		if (ftp_handler->port_21_buffs[i - 1].fd >= 0) {
 			ftp_handler->port_21_fds[i].fd = ftp_handler->port_21_buffs[i - 1].fd;
@@ -189,6 +156,7 @@ int ftp_poll_ports(ftp_ports_t *ftp_handler)
 			nfds += 1;
 		}
 	}
+	*/
 
 	return 0;
 }
