@@ -20,20 +20,6 @@
 
 #include "nb_fd_io.h"
 
-typedef struct fd_buff_struct {
-	int fd;
-	uint32_t state;
-
-	size_t rbuff_size;
-	uint8_t **rbuff;
-
-	/* wbuff_capacity and wbuff_size are not the same */
-	size_t wbuff_capacity;
-	size_t wbuff_size;
-	size_t wbuff_sent;
-	uint8_t **wbuff;
-} fd_buff_struct_t;
-
 int create_fd_buff_struct(fd_buff_struct_t *fd_buff, size_t rbuff_size, size_t wbuff_capacity)
 {
 	fd_buff->rbuff_size = rbuff_size;	
