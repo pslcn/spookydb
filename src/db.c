@@ -179,7 +179,7 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 
 	fd_conn->rbuff_size += (size_t)rv;
 
-	http_parse_req(&fd_conn->rbuff, &parsed_http_req->req_method, &parsed_http_req->req_path, &parsed_http_req->req_body, fd_conn->rbuff_size);
+	http_parse_req(fd_conn->rbuff, &parsed_http_req->req_method, &parsed_http_req->req_path, &parsed_http_req->req_body, fd_conn->rbuff_size);
 	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body);
 
 	/* Handle request method */
@@ -253,11 +253,13 @@ int main(int argc, char *argv[])
 
 	struct pollfd net_fds[NUM_CONNECTIONS];
 	size_t nfds = 1;
-	fd_buff_struct_t *net_fd_buffs;
+	fd_buff_struct_t **net_fd_buffs;
 	parsed_http_req_t *parsed_http_reqs = malloc(sizeof(parsed_http_req_t) * NUM_CONNECTIONS);
+	fprintf(stdout, "%p: created parsed_http_req_t\n");
 
-	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) 
-		create_fd_buff_struct(&net_fd_buffs[i], BUFFSIZE, BUFFSIZE);
+	fprintf(stdout, "%p: created net_fds with size %d\n", net_fds, NUM_CONNECTIONS);
+
+	create_fd_buff_struct_array(&net_fd_buffs, NUM_CONNECTIONS, BUFFSIZE, BUFFSIZE);
 
 	if (create_serv_sock(&serv_fd, &servaddr, 8080) != 0)
 		exit(1);
@@ -266,6 +268,8 @@ int main(int argc, char *argv[])
 	net_fds[0].fd = serv_fd;
 	net_fds[0].events = POLLIN;
 
+	fprintf(stdout, "%p: stored listening socket\n", &net_fds[0]);
+
 	/* FTP on ports 20 and 21 */
 
 	create_htable(&ht);
@@ -273,33 +277,34 @@ int main(int argc, char *argv[])
 
 	/* Event loop */
 	while (1) {
-		prepare_pollfd_array(net_fd_buffs, &net_fds, NUM_CONNECTIONS, &nfds);
+		/* Blocks until pollfd array has been prepared */
+		if (prepare_pollfd_array(net_fd_buffs, &net_fds[1], NUM_CONNECTIONS, &nfds) == 0) {
+			if (poll(net_fds, nfds, (5000)) > 0) {
+				/* Check active connections */
+				for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
+					if (net_fds[i].fd > 0 && net_fds[i].revents) {
+						/* Handle connection */
+						if (net_fd_buffs[i - 1]->state == STATE_REQ) {
+							http_handle_req(net_fd_buffs[i - 1], &parsed_http_reqs[i - 1]);
+						} else if (net_fd_buffs[i - 1]->state == STATE_RES)
+							http_handle_res(&net_fd_buffs[i - 1]);
 
-		if (poll(net_fds, nfds, (5000)) > 0) {
-			/* Check active connections */
-			for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
-				if (net_fds[i].fd > 0 && net_fds[i].revents) {
-					/* Handle connection */
-					if (net_fd_buffs[i - 1].state == STATE_REQ)
-						http_handle_req(&net_fd_buffs[i - 1], &parsed_http_reqs[i - 1]);
-					else if (net_fd_buffs[i - 1].state == STATE_RES)
-						http_handle_res(&net_fd_buffs[i - 1]);
+						/* Clean up array */
+						if (net_fd_buffs[i - 1]->fd > 0 && net_fd_buffs[i - 1]->state == STATE_END) {
+							fprintf(stdout, "Cleaning net_fd_buffs[%d] with FD %d\n", i - 1, net_fd_buffs[i - 1]->fd);
 
-					/* Clean up array */
-					if (net_fd_buffs[i - 1].fd > 0 && net_fd_buffs[i - 1].state == STATE_END) {
-						fprintf(stdout, "Cleaning net_fd_buffs[%d] with FD %d\n", i - 1, net_fd_buffs[i - 1].fd);
+							close(net_fd_buffs[i - 1]->fd);
 
-						close(net_fd_buffs[i - 1].fd);
+							net_fd_buffs[i - 1]->fd = 0;
+							net_fd_buffs[i - 1]->state = STATE_REQ;
+						}
+					} 
+				}
 
-						net_fd_buffs[i - 1].fd = 0;
-						net_fd_buffs[i - 1].state = STATE_REQ;
-					}
-				} 
-			}
-
-			/* Check listening socket for connections to accept */
-			if (net_fds[0].revents & POLLIN) {
-				serv_accept_connection(serv_fd, net_fd_buffs, NUM_CONNECTIONS);
+				/* Check listening socket for connections to accept */
+				if (net_fds[0].revents & POLLIN) {
+					serv_accept_connection(serv_fd, net_fd_buffs, NUM_CONNECTIONS);
+				}
 			}
 		}
 
@@ -315,10 +320,10 @@ int main(int argc, char *argv[])
 	fprintf(stdout, "Closing listening socket FD %d\n", serv_fd);
 	close(serv_fd);
 	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-		if (net_fd_buffs[i].fd > 0) {
-			fprintf(stdout, "Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs[i].fd, i);
+		if (net_fd_buffs[i]->fd > 0) {
+			fprintf(stdout, "Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs[i]->fd, i);
 
-			close(net_fd_buffs[i].fd);
+			close(net_fd_buffs[i]->fd);
 		}
 	}
 

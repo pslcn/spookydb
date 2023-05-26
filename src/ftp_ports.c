@@ -78,7 +78,6 @@ int create_ftp_handler(ftp_ports_t **ftp_handler)
 	(*ftp_handler)->port_21_fds[0]->events = POLLIN;
 	fprintf(stdout, "%p: serv_fd_21 (stored in port_21_fds)\n", (*ftp_handler)->port_21_fds[0]);
 
-
 	(*ftp_handler)->port_20_buffs_size = (*ftp_handler)->port_21_fds_size;
 	(*ftp_handler)->port_21_buffs_size = (*ftp_handler)->port_20_fds_size;
 	(*ftp_handler)->port_20_buffs = malloc(sizeof(port_buff_struct_t) * (*ftp_handler)->port_20_buffs_size);

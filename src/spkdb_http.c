@@ -30,6 +30,8 @@ void http_handle_res(fd_buff_struct_t *fd_conn)
 
 void http_parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size)
 {
+	fprintf(stdout, "%s\n", req);
+
 	/* Number of spaces; whether string is request body */
 	int spaces = 0, isbody = 0;
 
