@@ -30,7 +30,7 @@ void http_handle_res(fd_buff_struct_t *fd_conn)
 
 void http_parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size)
 {
-	fprintf(stdout, "%s\n", req);
+	fprintf(stdout, "content_buff_size: %d\n", content_buff_size);
 
 	/* Number of spaces; whether string is request body */
 	int spaces = 0, isbody = 0;
@@ -52,6 +52,8 @@ void http_parse_req(char *req, char *req_method, char *req_path, char *req_body,
 			}
 		}
 	}
+
+	fprintf(stdout, "path: %s\n", req_path);
 
 	/* Parse request body */
 	if (strncmp(req_method, "PUT", 4) == 0) {

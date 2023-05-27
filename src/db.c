@@ -179,6 +179,10 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 
 	fd_conn->rbuff_size += (size_t)rv;
 
+	fprintf(stdout, "fd_conn->rbuff_size: %d\n", fd_conn->rbuff_size);
+	if (fd_conn->rbuff_size < 0)
+		return;
+
 	http_parse_req(fd_conn->rbuff, &parsed_http_req->req_method, &parsed_http_req->req_path, &parsed_http_req->req_body, fd_conn->rbuff_size);
 	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body);
 
