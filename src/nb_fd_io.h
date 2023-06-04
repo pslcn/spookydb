@@ -13,6 +13,7 @@ typedef struct {
 	int fd;
 	uint32_t state;
 
+	size_t rbuff_capacity;
 	size_t rbuff_size;
 	uint8_t *rbuff;
 

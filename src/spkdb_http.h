@@ -54,7 +54,6 @@ void http_handle_res(fd_buff_struct_t *fd_conn)
 {
 	fprintf(stdout, "Sending response of %d bytes to FD %d\n", fd_conn->wbuff_size, fd_conn->fd);
 	ssize_t rv = write(fd_conn->fd, &fd_conn->wbuff, fd_conn->wbuff_size);
-
 	fd_conn->state = STATE_END;
 }
 

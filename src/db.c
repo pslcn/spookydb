@@ -174,7 +174,7 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 	fd_conn->rbuff_size = 0;
 
 	do {
-		rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], BUFFSIZE - fd_conn->rbuff_size);
+		rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], fd_conn->rbuff_capacity - fd_conn->rbuff_size);
 	} while (rv < 0 && errno == EINTR);
 
 	fd_conn->rbuff_size += (size_t)rv;
@@ -217,7 +217,7 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 		}	
 	}
 
-	memcpy(&fd_conn->wbuff, &resp, resp_bytes);
+	memcpy(fd_conn->wbuff, &resp, resp_bytes);
 	fd_conn->wbuff_size = resp_bytes;
 
 	fd_conn->state = STATE_RES;

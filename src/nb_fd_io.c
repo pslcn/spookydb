@@ -20,14 +20,14 @@
 
 #include "nb_fd_io.h"
 
-int create_fd_buff_struct(fd_buff_struct_t *fd_buff, size_t rbuff_size, size_t wbuff_capacity)
+int create_fd_buff_struct(fd_buff_struct_t *fd_buff, size_t rbuff_capacity, size_t wbuff_capacity)
 {
 	fd_buff->fd = 0;
 
-	fd_buff->rbuff_size = rbuff_size;	
+	fd_buff->rbuff_capacity = rbuff_capacity;	
 	fd_buff->wbuff_capacity = wbuff_capacity;
 
-	fd_buff->rbuff = calloc(fd_buff->rbuff_size, sizeof(uint8_t));
+	fd_buff->rbuff = calloc(fd_buff->rbuff_capacity, sizeof(uint8_t));
 	fd_buff->wbuff = calloc(fd_buff->wbuff_capacity, sizeof(uint8_t));
 
 	return 0;
