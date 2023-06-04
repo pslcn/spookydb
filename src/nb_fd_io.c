@@ -123,7 +123,7 @@ void serv_accept_connection(int serv_fd, fd_buff_struct_t *fd_buff_structs, size
 
 		for (size_t i = 0; i < fd_buff_structs_size; ++i) {
 			if (fd_buff_structs[i].fd <= 0) {
-				fprintf(stdout, "%p: Storing FD %d in fd_buff_structs[%d]\n", &(fd_buff_structs[i].fd), conn_fd, i);
+				/* fprintf(stdout, "%p: Storing FD %d in fd_buff_structs[%d]\n", &(fd_buff_structs[i].fd), conn_fd, i); */
 
 				fd_buff_structs[i].fd = conn_fd;
 				fd_buff_structs[i].state = STATE_REQ;
@@ -142,7 +142,7 @@ int prepare_pollfd_array(fd_buff_struct_t *fd_buff_structs, struct pollfd *pollf
 
 	for (size_t i = 1; i < pollfd_array_size; ++i) {
 		if (fd_buff_structs[i - 1].fd > 0) {
-			fprintf(stdout, "%p: Saving FD %d in pollfd_array[%d]\n", &pollfd_array[i], fd_buff_structs[i - 1].fd, i);
+			/* fprintf(stdout, "%p: Saving FD %d in pollfd_array[%d]\n", &pollfd_array[i], fd_buff_structs[i - 1].fd, i); */
 
 			pollfd_array[i].fd = fd_buff_structs[i - 1].fd;
 			pollfd_array[i].events = (fd_buff_structs[i - 1].state == STATE_REQ) ? POLLIN : POLLOUT;

@@ -284,6 +284,7 @@ int main(int argc, char *argv[])
 					if (net_fds[i].fd > 0 && net_fds[i].revents) {
 						/* Handle connection */
 						if (net_fd_buffs[i - 1].state == STATE_REQ) {
+							net_fd_buffs[i - 1].rbuff_size = 0;
 							http_handle_req(&net_fd_buffs[i - 1], &parsed_http_reqs[i - 1]);
 						} else if (net_fd_buffs[i - 1].state == STATE_RES)
 							http_handle_res(&net_fd_buffs[i - 1]);
