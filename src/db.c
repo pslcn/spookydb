@@ -52,9 +52,7 @@ static void create_ht_item(ht_item_t **item, char *key, char *value)
 	(*item)->key_size = sizeof(char) * (strlen(key) + 1);
 	(*item)->value_size = sizeof(char) * (strlen(value) + 1);
 
-	fprintf(stdout, "(create_ht_item) Created ht_item_t at %p\n", *item);
-	fprintf(stdout, "(create_ht_item) Key '%s' in %d bytes at %p\n", (*item)->key, (*item)->key_size, (*item)->key);
-	fprintf(stdout, "(create_ht_item) Value '%s' in %d bytes at %p\n", (*item)->value, (*item)->value_size, (*item)->value);
+	fprintf(stdout, "[ht_item_t %p]: [Key (%d bytes, at %p): '%s'] [Value (%d bytes, at %p): '%s']\n", *item, (*item)->key_size, (*item)->key, (*item)->key, (*item)->value_size, (*item)->value, (*item)->value);
 }
 
 static void create_htable(htable_t **table)
@@ -173,6 +171,8 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 {
 	ssize_t rv = 0;
 
+	fd_conn->rbuff_size = 0;
+
 	do {
 		rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], BUFFSIZE - fd_conn->rbuff_size);
 	} while (rv < 0 && errno == EINTR);
@@ -182,15 +182,15 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 	if (fd_conn->rbuff_size < 0)
 		return;
 
-	http_parse_req(fd_conn->rbuff, &parsed_http_req->req_method, &parsed_http_req->req_path, &parsed_http_req->req_body, fd_conn->rbuff_size);
-	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", &parsed_http_req->req_method, &parsed_http_req->req_path, &parsed_http_req->req_body);
+	http_parse_req(fd_conn->rbuff, parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body, fd_conn->rbuff_size);
+	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body);
 
 	/* Handle request method */
 	char resp[RESP_LEN];
 
 	/* Indexing req_path at 1 excludes '/' */
-	if (strncmp(&parsed_http_req->req_method, "GET", 4) == 0) {
-		char *value_pointer = htable_search(ht, &parsed_http_req->req_path + 1), *resp_body;
+	if (strncmp(parsed_http_req->req_method, "GET", 4) == 0) {
+		char *value_pointer = htable_search(ht, &parsed_http_req->req_path[1]), *resp_body;
 
 		if (value_pointer != NULL) {
 			resp_body = value_pointer;
@@ -200,12 +200,12 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 
 		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", resp_body);
 
-	} else if (strncmp(&parsed_http_req->req_method, "PUT", 4) == 0) {
-		htable_insert(ht, &parsed_http_req->req_path + 1, &parsed_http_req->req_body);
+	} else if (strncmp(parsed_http_req->req_method, "PUT", 4) == 0) {
+		htable_insert(ht, &parsed_http_req->req_path[1], parsed_http_req->req_body);
 		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
 
-	} else if (strncmp(&parsed_http_req->req_method, "DELETE", 7) == 0) {
-		htable_remove(ht, &parsed_http_req->req_path + 1); 
+	} else if (strncmp(parsed_http_req->req_method, "DELETE", 7) == 0) {
+		htable_remove(ht, &parsed_http_req->req_path[1]); 
 		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
 	}
 
@@ -261,6 +261,7 @@ int main(int argc, char *argv[])
 
 	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
 		create_fd_buff_struct(&net_fd_buffs[i], BUFFSIZE, BUFFSIZE);
+		create_parsed_http_req(&parsed_http_reqs[i]);
 	}
 
 	if (create_serv_sock(&serv_fd, &servaddr, 8080) != 0)
@@ -277,7 +278,7 @@ int main(int argc, char *argv[])
 	while (1) {
 		/* Blocks until pollfd array has been prepared */
 		if (prepare_pollfd_array(net_fd_buffs, net_fds + 1, NUM_CONNECTIONS, &nfds) == 0) {
-			if (poll(net_fds, nfds, (5000)) > 0) {
+			if (poll(net_fds, nfds, 5000) > 0) {
 				/* Check active connections */
 				for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
 					if (net_fds[i].fd > 0 && net_fds[i].revents) {
@@ -289,12 +290,11 @@ int main(int argc, char *argv[])
 
 						/* Clean up array */
 						if (net_fd_buffs[i - 1].fd > 0 && net_fd_buffs[i - 1].state == STATE_END) {
-							fprintf(stdout, "Cleaning net_fd_buffs[%d] with FD %d\n", i - 1, net_fd_buffs[i - 1].fd);
+							fprintf(stdout, "Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs[i - 1].fd, i - 1);
 
 							close(net_fd_buffs[i - 1].fd);
 
 							net_fd_buffs[i - 1].fd = 0;
-							net_fd_buffs[i - 1].state = STATE_REQ;
 						}
 					} 
 				}

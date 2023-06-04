@@ -119,7 +119,7 @@ void serv_accept_connection(int serv_fd, fd_buff_struct_t *fd_buff_structs, size
 			break;
 		fd_set_non_blocking(conn_fd);
 
-		fprintf(stdout, "Accepted %s\n", inet_ntoa(cli.sin_addr));
+		/* fprintf(stdout, "Accepted %s\n", inet_ntoa(cli.sin_addr)); */
 
 		for (size_t i = 0; i < fd_buff_structs_size; ++i) {
 			if (fd_buff_structs[i].fd <= 0) {
@@ -142,7 +142,7 @@ int prepare_pollfd_array(fd_buff_struct_t *fd_buff_structs, struct pollfd *pollf
 
 	for (size_t i = 1; i < pollfd_array_size; ++i) {
 		if (fd_buff_structs[i - 1].fd > 0) {
-			fprintf(stdout, "%p: creating pollfd_array[%d] with FD %d\n", &pollfd_array[i], i, fd_buff_structs[i - 1].fd);
+			fprintf(stdout, "%p: Saving FD %d in pollfd_array[%d]\n", &pollfd_array[i], fd_buff_structs[i - 1].fd, i);
 
 			pollfd_array[i].fd = fd_buff_structs[i - 1].fd;
 			pollfd_array[i].events = (fd_buff_structs[i - 1].state == STATE_REQ) ? POLLIN : POLLOUT;
