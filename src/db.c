@@ -99,7 +99,6 @@ static void htable_insert(htable_t *table, char *key, char *value)
 	unsigned long idx;
 	create_ht_item(&item, key, value);
 	hash_func(&idx, key);
-	fprintf(stdout, "(htable_insert) ht_item_t pointer is %p\n", item);
 	current = table->items[idx];
 	if (current == NULL) {
 		if (table->count == table->size) {
@@ -169,29 +168,29 @@ static char *htable_search(htable_t *table, char *key)
 
 static htable_t *ht;
 
+/* DB */
 void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_req)
 {
 	ssize_t rv = 0;
 
 	do {
-		rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], sizeof(fd_conn->rbuff) - fd_conn->rbuff_size);
+		rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], BUFFSIZE - fd_conn->rbuff_size);
 	} while (rv < 0 && errno == EINTR);
 
 	fd_conn->rbuff_size += (size_t)rv;
 
-	fprintf(stdout, "fd_conn->rbuff_size: %d\n", fd_conn->rbuff_size);
 	if (fd_conn->rbuff_size < 0)
 		return;
 
 	http_parse_req(fd_conn->rbuff, &parsed_http_req->req_method, &parsed_http_req->req_path, &parsed_http_req->req_body, fd_conn->rbuff_size);
-	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body);
+	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", &parsed_http_req->req_method, &parsed_http_req->req_path, &parsed_http_req->req_body);
 
 	/* Handle request method */
 	char resp[RESP_LEN];
 
-	/* &parsed_http_req->req_path[1] excludes '/' */
-	if (strncmp(parsed_http_req->req_method, "GET", 4) == 0) {
-		char *value_pointer = htable_search(ht, &parsed_http_req->req_path[1]), *resp_body;
+	/* Indexing req_path at 1 excludes '/' */
+	if (strncmp(&parsed_http_req->req_method, "GET", 4) == 0) {
+		char *value_pointer = htable_search(ht, &parsed_http_req->req_path + 1), *resp_body;
 
 		if (value_pointer != NULL) {
 			resp_body = value_pointer;
@@ -201,12 +200,12 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 
 		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", resp_body);
 
-	} else if (strncmp(parsed_http_req->req_method, "PUT", 4) == 0) {
-		htable_insert(ht, &parsed_http_req->req_path[1], parsed_http_req->req_body);
+	} else if (strncmp(&parsed_http_req->req_method, "PUT", 4) == 0) {
+		htable_insert(ht, &parsed_http_req->req_path + 1, &parsed_http_req->req_body);
 		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
 
-	} else if (strncmp(parsed_http_req->req_method, "DELETE", 7) == 0) {
-		htable_remove(ht, &parsed_http_req->req_path[1]); 
+	} else if (strncmp(&parsed_http_req->req_method, "DELETE", 7) == 0) {
+		htable_remove(ht, &parsed_http_req->req_path + 1); 
 		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
 	}
 
@@ -257,13 +256,12 @@ int main(int argc, char *argv[])
 
 	struct pollfd net_fds[NUM_CONNECTIONS];
 	size_t nfds = 1;
-	fd_buff_struct_t **net_fd_buffs;
-	parsed_http_req_t *parsed_http_reqs = malloc(sizeof(parsed_http_req_t) * NUM_CONNECTIONS);
-	fprintf(stdout, "%p: created parsed_http_req_t\n");
+	fd_buff_struct_t net_fd_buffs[NUM_CONNECTIONS];
+	parsed_http_req_t parsed_http_reqs[NUM_CONNECTIONS];
 
-	fprintf(stdout, "%p: created net_fds with size %d\n", net_fds, NUM_CONNECTIONS);
-
-	create_fd_buff_struct_array(&net_fd_buffs, NUM_CONNECTIONS, BUFFSIZE, BUFFSIZE);
+	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
+		create_fd_buff_struct(&net_fd_buffs[i], BUFFSIZE, BUFFSIZE);
+	}
 
 	if (create_serv_sock(&serv_fd, &servaddr, 8080) != 0)
 		exit(1);
@@ -272,35 +270,31 @@ int main(int argc, char *argv[])
 	net_fds[0].fd = serv_fd;
 	net_fds[0].events = POLLIN;
 
-	fprintf(stdout, "%p: stored listening socket\n", &net_fds[0]);
-
-	/* FTP on ports 20 and 21 */
-
 	create_htable(&ht);
 	htable_insert(ht, "Hello", "World");
 
 	/* Event loop */
 	while (1) {
 		/* Blocks until pollfd array has been prepared */
-		if (prepare_pollfd_array(net_fd_buffs, &net_fds[1], NUM_CONNECTIONS, &nfds) == 0) {
+		if (prepare_pollfd_array(net_fd_buffs, net_fds + 1, NUM_CONNECTIONS, &nfds) == 0) {
 			if (poll(net_fds, nfds, (5000)) > 0) {
 				/* Check active connections */
 				for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
 					if (net_fds[i].fd > 0 && net_fds[i].revents) {
 						/* Handle connection */
-						if (net_fd_buffs[i - 1]->state == STATE_REQ) {
-							http_handle_req(net_fd_buffs[i - 1], &parsed_http_reqs[i - 1]);
-						} else if (net_fd_buffs[i - 1]->state == STATE_RES)
+						if (net_fd_buffs[i - 1].state == STATE_REQ) {
+							http_handle_req(&net_fd_buffs[i - 1], &parsed_http_reqs[i - 1]);
+						} else if (net_fd_buffs[i - 1].state == STATE_RES)
 							http_handle_res(&net_fd_buffs[i - 1]);
 
 						/* Clean up array */
-						if (net_fd_buffs[i - 1]->fd > 0 && net_fd_buffs[i - 1]->state == STATE_END) {
-							fprintf(stdout, "Cleaning net_fd_buffs[%d] with FD %d\n", i - 1, net_fd_buffs[i - 1]->fd);
+						if (net_fd_buffs[i - 1].fd > 0 && net_fd_buffs[i - 1].state == STATE_END) {
+							fprintf(stdout, "Cleaning net_fd_buffs[%d] with FD %d\n", i - 1, net_fd_buffs[i - 1].fd);
 
-							close(net_fd_buffs[i - 1]->fd);
+							close(net_fd_buffs[i - 1].fd);
 
-							net_fd_buffs[i - 1]->fd = 0;
-							net_fd_buffs[i - 1]->state = STATE_REQ;
+							net_fd_buffs[i - 1].fd = 0;
+							net_fd_buffs[i - 1].state = STATE_REQ;
 						}
 					} 
 				}
@@ -311,23 +305,16 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-
-#if 0
-		/* Handle FTP server */
-		if (ftp_parsed_poll_ports() > 0) {
-				
-		}
-#endif
 	}
 
 	/* Close FDs */
 	fprintf(stdout, "Closing listening socket FD %d\n", serv_fd);
 	close(serv_fd);
 	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-		if (net_fd_buffs[i]->fd > 0) {
-			fprintf(stdout, "Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs[i]->fd, i);
+		if (net_fd_buffs[i].fd > 0) {
+			fprintf(stdout, "Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs[i].fd, i);
 
-			close(net_fd_buffs[i]->fd);
+			close(net_fd_buffs[i].fd);
 		}
 	}
 

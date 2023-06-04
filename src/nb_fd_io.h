@@ -14,24 +14,24 @@ typedef struct {
 	uint32_t state;
 
 	size_t rbuff_size;
-	uint8_t **rbuff;
+	uint8_t *rbuff;
 
 	/* wbuff_capacity and wbuff_size are not the same */
 	size_t wbuff_capacity;
 	size_t wbuff_size;
 	size_t wbuff_sent;
-	uint8_t **wbuff;
+	uint8_t *wbuff;
 } fd_buff_struct_t;
 
-int create_fd_buff_struct(fd_buff_struct_t **fd_buff, size_t rbuff_size, size_t wbuff_capacity);
+int create_fd_buff_struct(fd_buff_struct_t *fd_buff, size_t rbuff_size, size_t wbuff_capacity);
 int close_fd_buff_struct(fd_buff_struct_t *fd_buff);
 
-int create_fd_buff_struct_array(fd_buff_struct_t ***fd_buffs, size_t fd_buffs_size, size_t rbuff_size, size_t wbuff_capacity);
+int create_fd_buff_struct_array(fd_buff_struct_t **fd_buffs, size_t fd_buffs_size, size_t rbuff_size, size_t wbuff_capacity);
 
 int fd_set_non_blocking(int fd);
 int create_serv_sock(int *serv_fd, struct sockaddr_in *servaddr, int port);
 
-void serv_accept_connection(int serv_fd, fd_buff_struct_t **fd_buff_structs, size_t fd_buff_structs_size);
-int prepare_pollfd_array(fd_buff_struct_t **fd_buff_structs, struct pollfd *pollfd_array, size_t pollfd_array_size, size_t *nfds);
+void serv_accept_connection(int serv_fd, fd_buff_struct_t *fd_buff_structs, size_t fd_buff_structs_size);
+int prepare_pollfd_array(fd_buff_struct_t *fd_buff_structs, struct pollfd *pollfd_array, size_t pollfd_array_size, size_t *nfds);
 
 #endif

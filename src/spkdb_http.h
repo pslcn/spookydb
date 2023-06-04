@@ -29,16 +29,26 @@
 #define RESP_LEN 1024
 
 typedef struct {
-	/* Only supports GET, PUT, and DELETE; DELETE is 6 characters */
-	char *req_method, *req_path, *req_body;
+	char *req_method;
+	char *req_path;
+	char *req_body;
 } parsed_http_req_t;
 
-void http_handle_res(fd_buff_struct_t *fd_conn);
-void http_parse_req(char *req, char *req_method, char *req_path, char *req_body, char content_buff_size);
+void http_handle_res(fd_buff_struct_t *fd_buff);
+void http_parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size);
 void http_write_resp(char *resp, char *status, char *resp_headers, char *resp_body);
 
-int create_parsed_http_req(parsed_http_req_t **parsed_req);
-int create_parsed_http_req_array(parsed_http_req_t ***parsed_http_reqs, size_t parsed_http_reqs_size);
+int create_parsed_http_req(parsed_http_req_t *parsed_http_req);
+
+/* Only supports GET, PUT, and DELETE; DELETE is 6 characters */
+int create_parsed_http_req(parsed_http_req_t *parsed_http_req)
+{
+	parsed_http_req->req_method = malloc(sizeof(char) * 8);
+	parsed_http_req->req_path = malloc(sizeof(char) * BUFFSIZE);
+	parsed_http_req->req_body = malloc(sizeof(char) * BUFFSIZE);
+
+	return 0;
+}
 
 void http_handle_res(fd_buff_struct_t *fd_conn)
 {
@@ -50,8 +60,6 @@ void http_handle_res(fd_buff_struct_t *fd_conn)
 
 void http_parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size)
 {
-	fprintf(stdout, "content_buff_size: %d\n", content_buff_size);
-
 	/* Number of spaces; whether string is request body */
 	int spaces = 0, isbody = 0;
 
@@ -73,8 +81,6 @@ void http_parse_req(char *req, char *req_method, char *req_path, char *req_body,
 		}
 	}
 
-	fprintf(stdout, "path: %s\n", req_path);
-
 	/* Parse request body */
 	if (strncmp(req_method, "PUT", 4) == 0) {
 		for (size_t c = 0; c < content_buff_size; ++c) {
@@ -87,6 +93,7 @@ void http_parse_req(char *req, char *req_method, char *req_path, char *req_body,
 				req_body[c - isbody] = req[c];
 			}
 		}
+		req_body[(content_buff_size - isbody) + 1] = '\0';
 	} else 
 		strncpy(req_body, "NULL", 5);	
 }
@@ -147,37 +154,6 @@ void http_write_resp(char *resp, char *status, char *resp_headers, char *resp_bo
 	strncpy(&resp[resp_num_chars], resp_body, strlen(resp_body));
 	resp_num_chars += strlen(resp_body);
 	resp[resp_num_chars] = '\0';
-}
-
-int create_parsed_http_req(parsed_http_req_t **parsed_req)
-{
-	*parsed_req = malloc(sizeof(parsed_http_req_t));
-
-	(*parsed_req)->req_method = calloc(8, sizeof(char *));
-	(*parsed_req)->req_path = calloc(BUFFSIZE, sizeof(char *));
-	(*parsed_req)->req_body = calloc(BUFFSIZE, sizeof(char *));
-
-	for (size_t i = 0; i < 8; ++i) 
-		(*parsed_req)->req_method[i] = malloc(sizeof(char));
-	
-	for (size_t i = 0; i < BUFFSIZE; ++i) {
-		(*parsed_req)->req_path[i] = malloc(sizeof(char));
-		(*parsed_req)->req_body[i] = malloc(sizeof(char));
-	}
-
-	return 0;
-}
-
-int create_parsed_http_req_array(parsed_http_req_t ***parsed_http_reqs, size_t parsed_http_reqs_size)
-{
-	*parsed_http_reqs = calloc(parsed_http_reqs_size, sizeof(parsed_http_req_t *));
-	fprintf(stdout, "%p: created parse_http_req_t array with size %d\n", *parsed_http_reqs, parsed_http_reqs_size);
-
-	for (size_t i = 0; i < parsed_http_reqs_size; ++i) {
-		create_parsed_http_req(&(*parsed_http_reqs)[i]);	
-	}
-
-	return 0;
 }
 
 #endif
