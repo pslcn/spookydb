@@ -42,10 +42,10 @@ int close_fd_buff_struct(fd_buff_struct_t *fd_buff)
 
 	if (fd_buff->rbuff != NULL) {
 		for (size_t i = 0; i < fd_buff->rbuff_size; ++i) {
-			if (fd_buff->rbuff[i] == NULL)
+			if (fd_buff->rbuff == NULL)
 				continue;
 
-			free(fd_buff->rbuff[i]);	
+			free(fd_buff->rbuff);	
 		}
 
 		free(fd_buff->rbuff);
@@ -53,10 +53,10 @@ int close_fd_buff_struct(fd_buff_struct_t *fd_buff)
 
 	if (fd_buff->wbuff != NULL) {
 		for (size_t i = 0; i < fd_buff->wbuff_capacity; ++i) {
-			if (fd_buff->wbuff[i] == NULL)
+			if (fd_buff->wbuff == NULL)
 				continue;
 
-			free(fd_buff->wbuff[i]);
+			free(fd_buff->wbuff);
 		}
 
 		free(fd_buff->wbuff);
@@ -83,7 +83,7 @@ int create_serv_sock(int *serv_fd, struct sockaddr_in *servaddr, int port)
 	if (*serv_fd == -1)
 		return 1;
 	fd_set_non_blocking(*serv_fd);
-	fprintf("%p: created non-blocking socket\n", serv_fd);
+	/* fprintf(stdout, "%p: created non-blocking socket\n", serv_fd); */
 	
 	int enable = 1;
 	if (setsockopt(*serv_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
@@ -123,7 +123,7 @@ void serv_accept_connection(int serv_fd, fd_buff_struct_t *fd_buff_structs, size
 
 		for (size_t i = 0; i < fd_buff_structs_size; ++i) {
 			if (fd_buff_structs[i].fd <= 0) {
-				fprintf(stdout, "%p: storing FD %d in fd_buff_structs[%d]\n", &(fd_buff_structs[i].fd), conn_fd, i);
+				fprintf(stdout, "%p: Storing FD %d in fd_buff_structs[%d]\n", &(fd_buff_structs[i].fd), conn_fd, i);
 
 				fd_buff_structs[i].fd = conn_fd;
 				fd_buff_structs[i].state = STATE_REQ;

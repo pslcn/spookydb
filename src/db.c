@@ -92,7 +92,7 @@ static void handle_ht_collision(htable_t *table, ht_item_t *item)
 
 static void htable_insert(htable_t *table, char *key, char *value)
 {
-	fprintf(stdout, "(htable_insert) Inserting value '%s' in key '%s'\n", value, key);
+	/* fprintf(stdout, "(htable_insert) Inserting value '%s' in key '%s'\n", value, key); */
 	ht_item_t *item, *current;
 	unsigned long idx;
 	create_ht_item(&item, key, value);
@@ -104,7 +104,7 @@ static void htable_insert(htable_t *table, char *key, char *value)
 			free_ht_item(item);
 			return;
 		}
-		fprintf(stdout, "(htable_insert) Storing item at %p in table->items[%d]\n", item, idx);
+		/* fprintf(stdout, "(htable_insert) Storing item at %p in table->items[%d]\n", item, idx); */
 		table->items[idx] = item;
 		table->count++;
 
@@ -198,15 +198,15 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 			resp_body = "NULL\n";
 		}
 
-		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", resp_body);
+		http_write_resp(resp, "200 OK", "Content-Type: text/plain", resp_body);
 
 	} else if (strncmp(parsed_http_req->req_method, "PUT", 4) == 0) {
 		htable_insert(ht, &parsed_http_req->req_path[1], parsed_http_req->req_body);
-		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
+		http_write_resp(resp, "200 OK", "Content-Type: text/plain", "");
 
 	} else if (strncmp(parsed_http_req->req_method, "DELETE", 7) == 0) {
 		htable_remove(ht, &parsed_http_req->req_path[1]); 
-		http_write_resp(&resp, "200 OK", "Content-Type: text/plain", "");
+		http_write_resp(resp, "200 OK", "Content-Type: text/plain", "");
 	}
 
 	size_t resp_bytes = 0;
@@ -290,10 +290,9 @@ int main(int argc, char *argv[])
 
 						/* Clean up array */
 						if (net_fd_buffs[i - 1].fd > 0 && net_fd_buffs[i - 1].state == STATE_END) {
-							fprintf(stdout, "Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs[i - 1].fd, i - 1);
+							fprintf(stdout, "%p: Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs + (i - 1), net_fd_buffs[i - 1].fd, i - 1);
 
 							close(net_fd_buffs[i - 1].fd);
-
 							net_fd_buffs[i - 1].fd = 0;
 						}
 					} 
@@ -313,16 +312,12 @@ int main(int argc, char *argv[])
 	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
 		if (net_fd_buffs[i].fd > 0) {
 			fprintf(stdout, "Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs[i].fd, i);
-
 			close(net_fd_buffs[i].fd);
 		}
 	}
-
 	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) 
 		close_fd_buff_struct(&net_fd_buffs[i]);
-
 	free(net_fd_buffs);
-	
 	free_htable(ht);
 
 	return 0;

@@ -146,7 +146,7 @@ void http_write_resp(char *resp, char *status, char *resp_headers, char *resp_bo
 		reversed_content_length[i] = str_content_length[(num_digits - 1) - i];
 	}
 
-	strncpy(&resp[resp_num_chars], &reversed_content_length, num_digits);
+	strncpy(&resp[resp_num_chars], reversed_content_length, num_digits);
 	resp_num_chars += num_digits;
 	strncpy(&resp[resp_num_chars], "\n\n", 2);
 	resp_num_chars += 2;
