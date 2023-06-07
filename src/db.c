@@ -52,7 +52,7 @@ static void create_ht_item(ht_item_t **item, char *key, char *value)
 	(*item)->key_size = sizeof(char) * (strlen(key) + 1);
 	(*item)->value_size = sizeof(char) * (strlen(value) + 1);
 
-	fprintf(stdout, "[ht_item_t %p]: [Key (%d bytes, at %p): '%s'] [Value (%d bytes, at %p): '%s']\n", *item, (*item)->key_size, (*item)->key, (*item)->key, (*item)->value_size, (*item)->value, (*item)->value);
+	fprintf(stdout, "[ht_item_t %p]: [Key (%ld bytes, at %p): '%s'] [Value (%ld bytes, at %p): '%s']\n", *item, (*item)->key_size, (*item)->key, (*item)->key, (*item)->value_size, (*item)->value, (*item)->value);
 }
 
 static void create_htable(htable_t **table)
@@ -92,7 +92,7 @@ static void handle_ht_collision(htable_t *table, ht_item_t *item)
 
 static void htable_insert(htable_t *table, char *key, char *value)
 {
-	/* fprintf(stdout, "(htable_insert) Inserting value '%s' in key '%s'\n", value, key); */
+	fprintf(stdout, "(htable_insert) Inserting value '%s' in key '%s'\n", value, key); 
 	ht_item_t *item, *current;
 	unsigned long idx;
 	create_ht_item(&item, key, value);
@@ -141,13 +141,13 @@ static char *htable_search(htable_t *table, char *key)
 	hash_func(&idx, key);
 	item = table->items[idx];
 
-	fprintf(stdout, "(htable_search) Searching %p in table->items[%d] for key '%s'\n", item, idx, key);
+	fprintf(stdout, "(htable_search) Searching %p in table->items[%ld] for key '%s'\n", item, idx, key);
 
 	if (item == NULL)
 		return NULL;
 
-	fprintf(stdout, "(htable_search) Has key with %d bytes\n", item->key_size);
-	fprintf(stdout, "(htable_search) Has value with %d bytes\n", item->value_size);
+	fprintf(stdout, "(htable_search) Has key with %ld bytes\n", item->key_size);
+	fprintf(stdout, "(htable_search) Has value with %ld bytes\n", item->value_size);
 
 	if ((item->key_size > 0) && (item->value_size > 0)) {
 		fprintf(stdout, "(htable_search) Searching key at %p\n", item->key);
@@ -173,14 +173,19 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 
 	fd_conn->rbuff_size = 0;
 
+	/*
 	do {
 		rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], fd_conn->rbuff_capacity - fd_conn->rbuff_size);
 	} while (rv < 0 && errno == EINTR);
 
-	fd_conn->rbuff_size += (size_t)rv;
-
-	if (fd_conn->rbuff_size < 0)
+	if (rv < 0) 
 		return;
+
+	fd_conn->rbuff_size += (size_t)rv;
+	*/
+
+	read(fd_conn->fd, fd_conn->rbuff, fd_conn->rbuff_capacity);
+	fd_conn->rbuff_size = fd_conn->rbuff_capacity;
 
 	http_parse_req(fd_conn->rbuff, parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body, fd_conn->rbuff_size);
 	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body);
@@ -291,7 +296,7 @@ int main(int argc, char *argv[])
 
 						/* Clean up array */
 						if (net_fd_buffs[i - 1].fd > 0 && net_fd_buffs[i - 1].state == STATE_END) {
-							fprintf(stdout, "%p: Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs + (i - 1), net_fd_buffs[i - 1].fd, i - 1);
+							fprintf(stdout, "%p: Closing FD %d in net_fd_buffs[%ld]\n", net_fd_buffs + (i - 1), net_fd_buffs[i - 1].fd, i - 1);
 
 							close(net_fd_buffs[i - 1].fd);
 							net_fd_buffs[i - 1].fd = 0;
@@ -312,7 +317,7 @@ int main(int argc, char *argv[])
 	close(serv_fd);
 	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
 		if (net_fd_buffs[i].fd > 0) {
-			fprintf(stdout, "Closing FD %d in net_fd_buffs[%d]\n", net_fd_buffs[i].fd, i);
+			fprintf(stdout, "Closing FD %d in net_fd_buffs[%ld]\n", net_fd_buffs[i].fd, i);
 			close(net_fd_buffs[i].fd);
 		}
 	}
