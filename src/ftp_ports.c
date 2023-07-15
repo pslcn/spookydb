@@ -66,8 +66,8 @@ int create_ftp_handler(ftp_ports_t **ftp_handler)
 
 	(*ftp_handler)->port_21_fds = calloc((*ftp_handler)->port_21_fds_size, sizeof(struct pollfd *));
 	(*ftp_handler)->port_20_fds = calloc((*ftp_handler)->port_20_fds_size, sizeof(struct pollfd *));
-	fprintf(stdout, "%p: port_21_fds with size %d\n", (*ftp_handler)->port_21_fds, (*ftp_handler)->port_21_fds_size);
-	fprintf(stdout, "%p: port_20_fds with size %d\n", (*ftp_handler)->port_20_fds, (*ftp_handler)->port_20_fds_size);
+	fprintf(stdout, "%p: port_21_fds with size %ld\n", (*ftp_handler)->port_21_fds, (*ftp_handler)->port_21_fds_size);
+	fprintf(stdout, "%p: port_20_fds with size %ld\n", (*ftp_handler)->port_20_fds, (*ftp_handler)->port_20_fds_size);
 
 	for (size_t i = 0; i < (*ftp_handler)->port_21_fds_size; ++i) 
 		(*ftp_handler)->port_21_fds[i] = malloc(sizeof(struct pollfd));
