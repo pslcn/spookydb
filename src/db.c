@@ -320,9 +320,9 @@ int main(int argc, char *argv[])
 			fprintf(stdout, "Closing FD %d in net_fd_buffs[%ld]\n", net_fd_buffs[i].fd, i);
 			close(net_fd_buffs[i].fd);
 		}
-	}
-	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) 
+
 		close_fd_buff_struct(&net_fd_buffs[i]);
+	}
 	free(net_fd_buffs);
 	free_htable(ht);
 
