@@ -55,6 +55,14 @@ int init_ftp_handler(ftp_handler_t *ftp_handler)
 	ftp_handler->fds20_buffs = malloc(sizeof(fd_buff_struct_t) * ftp_handler->fds20_buffs_size);
 	ftp_handler->fds21_buffs = malloc(sizeof(fd_buff_struct_t) * ftp_handler->fds21_buffs_size);
 
+	for (size_t i = 0; i < ftp_handler->fds20_buffs_size; ++i) {
+		create_fd_buff_struct(ftp_handler->fds20_buffs + i, BUFFSIZE, BUFFSIZE);
+	}
+
+	for (size_t i = 0; i < ftp_handler->fds21_buffs_size; ++i) {
+		create_fd_buff_struct(ftp_handler->fds21_buffs + i, BUFFSIZE, BUFFSIZE);
+	}
+
 	return 0;
 }
 
@@ -63,13 +71,13 @@ int close_ftp_handler(ftp_handler_t *ftp_handler)
 	if (ftp_handler == NULL)
 		return 1;
 
-	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
+	for (size_t i = 0; i < ftp_handler->poll_21fds_size; ++i) {
 		if (ftp_handler->poll_21fds[i].fd > 0)
 			close(ftp_handler->poll_21fds[i].fd);
 	}
 	free(ftp_handler->poll_21fds);
 
-	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
+	for (size_t i = 0; i < ftp_handler->poll_20fds_size; ++i) {
 		if (ftp_handler->poll_20fds[i].fd > 0)
 			close(ftp_handler->poll_20fds[i].fd);
 	}
@@ -81,6 +89,43 @@ int close_ftp_handler(ftp_handler_t *ftp_handler)
 	return 0;
 }
 
+void serve_ftp(ftp_handler_t ftp_handler) 
+{
+	size_t nfds = 1;
+
+	while(1) {
+		if (prepare_pollfd_array(ftp_handler.fds21_buffs, ftp_handler.poll_21fds, ftp_handler.poll_21fds_size, &nfds) == 0) {
+			if (poll(ftp_handler.poll_21fds, nfds, 5000) > 0) {
+				/* Check active connections */
+				for (size_t i = 1; i < ftp_handler.poll_21fds_size; ++i) {
+					if (ftp_handler.poll_21fds[i].fd > 0 && ftp_handler.poll_21fds[i].revents) {
+						/* Handle connection */
+						if (ftp_handler.fds21_buffs[i - 1].state == STATE_REQ) {
+							ftp_handler.fds21_buffs[i - 1].rbuff_size = 0;
+
+							ftp_handler.fds21_buffs[i - 1].state = STATE_END;
+						} else if (ftp_handler.fds21_buffs[i - 1].state == STATE_RES)
+							ftp_handler.fds21_buffs[i - 1].state = STATE_END;
+
+						/* Clean up array */
+						if (ftp_handler.fds21_buffs[i - 1].fd > 0 && ftp_handler.fds21_buffs[i - 1].state == STATE_END) {
+							fprintf(stdout, "%p: Closing FD %d in ftp_handler.fds21_buffs[%ld]\n", ftp_handler.fds21_buffs + (i - 1), ftp_handler.fds21_buffs[i - 1].fd, i - 1);
+
+							close(ftp_handler.fds21_buffs[i - 1].fd);
+							ftp_handler.fds21_buffs[i - 1].fd = 0;
+						}
+					} 
+				}
+				
+				/* Check listening socket for connections to accept */
+				if (ftp_handler.poll_21fds[0].revents & POLLIN) {
+					serv_accept_connection(ftp_handler.serv_fd21, ftp_handler.fds21_buffs, ftp_handler.fds21_buffs_size);
+				}
+			}
+		}
+	}
+}
+
 /* Testing */
 #if 1
 int main(void)
@@ -88,9 +133,12 @@ int main(void)
 	ftp_handler_t ftp_handler;
 
 	init_ftp_handler(&ftp_handler);
+
+	serve_ftp(ftp_handler);
 	
 	close_ftp_handler(&ftp_handler);
 
 	return 0;
 }
 #endif
+
