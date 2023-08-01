@@ -141,7 +141,7 @@ static char *htable_search(htable_t *table, char *key)
 	hash_func(&idx, key);
 	item = table->items[idx];
 
-	fprintf(stdout, "(htable_search) Searching %p in table->items[%ld] for key '%s'\n", item, idx, key);
+	/* fprintf(stdout, "(htable_search) Searching %p in table->items[%ld] for key '%s'\n", item, idx, key); */
 
 	if (item == NULL)
 		return NULL;

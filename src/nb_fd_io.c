@@ -123,7 +123,7 @@ void serv_accept_connection(int serv_fd, fd_buff_struct_t *fd_buff_structs, size
 
 		for (size_t i = 0; i < fd_buff_structs_size; ++i) {
 			if (fd_buff_structs[i].fd <= 0) {
-				/* fprintf(stdout, "%p: Storing FD %d in fd_buff_structs[%d]\n", &(fd_buff_structs[i].fd), conn_fd, i); */
+				fprintf(stdout, "%p: Storing FD %d in fd_buff_structs[%ld]\n", &(fd_buff_structs[i].fd), conn_fd, i);
 
 				fd_buff_structs[i].fd = conn_fd;
 				fd_buff_structs[i].state = STATE_REQ;
