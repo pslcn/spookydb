@@ -1,5 +1,5 @@
-#ifndef HTTP_H_
-#define HTTP_H_
+#ifndef HTTP_HANDLE_H_
+#define HTTP_HANDLE_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,9 +29,7 @@
 #define RESP_LEN 1024
 
 typedef struct {
-  char *req_method;
-  char *req_path;
-  char *req_body;
+  char *req_method, *req_path, *req_body;
 } parsed_http_req_t;
 
 void http_handle_res(fd_buff_struct_t *fd_buff);
@@ -43,10 +41,9 @@ int create_parsed_http_req(parsed_http_req_t *parsed_http_req);
 /* Only supports GET, PUT, and DELETE; DELETE is 6 characters */
 int create_parsed_http_req(parsed_http_req_t *parsed_http_req)
 {
-  parsed_http_req->req_method = malloc(sizeof(char) * 8);
+  parsed_http_req->req_method = malloc(sizeof(char) * 6);
   parsed_http_req->req_path = malloc(sizeof(char) * BUFFSIZE);
   parsed_http_req->req_body = malloc(sizeof(char) * BUFFSIZE);
-
   return 0;
 }
 
