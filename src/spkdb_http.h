@@ -19,7 +19,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-#include "nb_fd_io.h"
+#include "non_blocking_fd_io.h"
 
 #define LENGTH(X) (sizeof X / sizeof X[0])
 
@@ -52,8 +52,8 @@ int create_parsed_http_req(parsed_http_req_t *parsed_http_req)
 
 void http_handle_res(fd_buff_struct_t *fd_conn)
 {
-	fprintf(stdout, "Sending response of %ld bytes to FD %d\n", fd_conn->wbuff_size, fd_conn->fd);
-	ssize_t rv = write(fd_conn->fd, fd_conn->wbuff, fd_conn->wbuff_size);
+	fprintf(stdout, "Sending response of %ld bytes to FD %d\n", fd_conn->wbuff.buff_size, fd_conn->fd);
+	ssize_t rv = write(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size);
 	fd_conn->state = STATE_END;
 }
 
@@ -145,9 +145,9 @@ void http_write_resp(char *resp, char *status, char *resp_headers, char *resp_bo
 		reversed_content_length[i] = str_content_length[(num_digits - 1) - i];
 	}
 
-	strncpy(&resp[resp_num_chars], reversed_content_length, num_digits);
+	strncpy(&resp[resp_num_chars], reversed_content_length, num_digits); 
 	resp_num_chars += num_digits;
-	strncpy(&resp[resp_num_chars], "\n\n", 2);
+	strncpy(&resp[resp_num_chars], "\n\n", 2); /* Should not be null-terminated */
 	resp_num_chars += 2;
 
 	strncpy(&resp[resp_num_chars], resp_body, strlen(resp_body));
@@ -156,3 +156,4 @@ void http_write_resp(char *resp, char *status, char *resp_headers, char *resp_bo
 }
 
 #endif
+

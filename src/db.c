@@ -169,12 +169,11 @@ static htable_t *ht;
 void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_req)
 {
   /* Read into fd_conn->rbuff and parse the HTTP request */
-	fd_conn->rbuff_size = 0;
-	read(fd_conn->fd, fd_conn->rbuff, fd_conn->rbuff_capacity);
-	fd_conn->rbuff_size = fd_conn->rbuff_capacity;
-	http_parse_req(fd_conn->rbuff, parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body, fd_conn->rbuff_size);
-
-	/* fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body); */
+	fd_conn->rbuff.buff_size = 0;
+	read(fd_conn->fd, fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_capacity);
+	fd_conn->rbuff.buff_size = fd_conn->rbuff.buff_capacity;
+	http_parse_req(fd_conn->rbuff.buff_content, parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body, fd_conn->rbuff.buff_size);
+	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body); 
 
 	char resp[RESP_LEN];
 	/* (Indexing req_path at 1 excludes '/') */
@@ -205,8 +204,8 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 	}
 
   /* Copy response to fd_conn->wbuff and switch to response state */
-	memcpy(fd_conn->wbuff, &resp, resp_bytes);
-	fd_conn->wbuff_size = resp_bytes;
+	memcpy(fd_conn->wbuff.buff_content, &resp, resp_bytes);
+	fd_conn->wbuff.buff_size = resp_bytes;
 	fd_conn->state = STATE_RES;
 	http_handle_res(fd_conn);
 }
@@ -241,54 +240,54 @@ int main(int argc, char *argv[])
 	int serv_fd;
 	struct sockaddr_in servaddr;
 
-	struct pollfd net_fds[NUM_CONNECTIONS];
-	size_t nfds = 1;
-	fd_buff_struct_t net_fd_buffs[NUM_CONNECTIONS];
+	struct pollfd serv_pollfd_array[NUM_CONNECTIONS];
+	fd_buff_struct_t serv_pollfd_buffs[NUM_CONNECTIONS];
 	parsed_http_req_t parsed_http_reqs[NUM_CONNECTIONS];
+	size_t nfds = 1;
 
 	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-		create_fd_buff_struct(&net_fd_buffs[i], BUFFSIZE, BUFFSIZE);
-		create_parsed_http_req(&parsed_http_reqs[i]);
+		create_fd_buff_struct(&(serv_pollfd_buffs[i]), BUFFSIZE, BUFFSIZE);
+		create_parsed_http_req(&(parsed_http_reqs[i])); 
 	}
 
 	if (create_serv_sock(&serv_fd, &servaddr, 8080) != 0)
 		exit(1);
 	if (listen(serv_fd, (int)(NUM_CONNECTIONS / 2)) < 0)
 		exit(1);
-	net_fds[0].fd = serv_fd;
-	net_fds[0].events = POLLIN;
+  /* Poll the server FD */
+	serv_pollfd_array[0].fd = serv_fd;
+	serv_pollfd_array[0].events = POLLIN;
 
+  /* Testing with hash table */
 	create_htable(&ht);
 	htable_insert(ht, "Hello", "World");
 
 	/* Event loop */
 	while (1) {
 		/* Blocks until pollfd array has been prepared */
-		if (prepare_pollfd_array(net_fd_buffs, net_fds + 1, NUM_CONNECTIONS, &nfds) == 0) {
-			if (poll(net_fds, nfds, 5000) > 0) {
+		if (prepare_pollfd_array(serv_pollfd_buffs, &(serv_pollfd_array[1]), NUM_CONNECTIONS, &nfds) == 0) {
+			if (poll(serv_pollfd_array, nfds, 5000) > 0) {
 				/* Check active connections */
 				for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
-					if (net_fds[i].fd > 0 && net_fds[i].revents) {
-						/* Handle connection */
-						if (net_fd_buffs[i - 1].state == STATE_REQ) {
-							net_fd_buffs[i - 1].rbuff_size = 0;
-							http_handle_req(&net_fd_buffs[i - 1], &parsed_http_reqs[i - 1]);
-						} else if (net_fd_buffs[i - 1].state == STATE_RES)
-							http_handle_res(&net_fd_buffs[i - 1]);
+					if (serv_pollfd_array[i].fd > 0 && serv_pollfd_array[i].revents) {
+						if (serv_pollfd_buffs[i - 1].state == STATE_REQ) {
+							http_handle_req(&(serv_pollfd_buffs[i - 1]), &parsed_http_reqs[i - 1]);
+						} else if (serv_pollfd_buffs[i - 1].state == STATE_RES)
+							http_handle_res(&(serv_pollfd_buffs[i - 1]));
 
 						/* Clean up array */
-						if (net_fd_buffs[i - 1].fd > 0 && net_fd_buffs[i - 1].state == STATE_END) {
-							fprintf(stdout, "%p: Closing FD %d in net_fd_buffs[%ld]\n", net_fd_buffs + (i - 1), net_fd_buffs[i - 1].fd, i - 1);
+						if (serv_pollfd_buffs[i - 1].fd > 0 && serv_pollfd_buffs[i - 1].state == STATE_END) {
+							fprintf(stdout, "%p: Closing FD %d in serv_pollfd_buffs[%ld]\n", serv_pollfd_buffs + (i - 1), serv_pollfd_buffs[i - 1].fd, i - 1);
 
-							close(net_fd_buffs[i - 1].fd);
-							net_fd_buffs[i - 1].fd = 0;
+							close(serv_pollfd_buffs[i - 1].fd);
+							serv_pollfd_buffs[i - 1].fd = 0;
 						}
 					} 
 				}
 
 				/* Check listening socket for connections to accept */
-				if (net_fds[0].revents & POLLIN) {
-					serv_accept_connection(serv_fd, net_fd_buffs, NUM_CONNECTIONS);
+				if (serv_pollfd_array[0].revents & POLLIN) {
+					serv_accept_connection(serv_fd, serv_pollfd_buffs, NUM_CONNECTIONS);
 				}
 			}
 		}
@@ -298,16 +297,11 @@ int main(int argc, char *argv[])
 	fprintf(stdout, "Closing listening socket FD %d\n", serv_fd);
 	close(serv_fd);
 	for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-		if (net_fd_buffs[i].fd > 0) {
-			fprintf(stdout, "Closing FD %d in net_fd_buffs[%ld]\n", net_fd_buffs[i].fd, i);
-			close(net_fd_buffs[i].fd);
+		if (serv_pollfd_buffs[i].fd > 0) {
+			fprintf(stdout, "Closing FD %d in serv_pollfd_buffs[%ld]\n", serv_pollfd_buffs[i].fd, i);
+			close(serv_pollfd_buffs[i].fd);
 		}
-
-		close_fd_buff_struct(&net_fd_buffs[i]);
 	}
-	free(net_fd_buffs);
-	free_htable(ht);
-
 	return 0;
 }
 

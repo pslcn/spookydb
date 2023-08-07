@@ -21,7 +21,7 @@
 int create_buff(buff_t *buff, size_t buff_capacity)
 {
   buff->buff_capacity = buff_capacity;
-  buff->buff_content = calloc(buff_capacity, sizeof(uint8_t));
+  buff->buff_content = calloc(buff_capacity, sizeof(char));
   return 0;
 }
 
@@ -86,7 +86,7 @@ void serv_accept_connection(int serv_fd, fd_buff_struct_t *fd_buff_structs, size
 {
   int conn_fd = 0;
   struct sockaddr_in cli;
-  int addrlen = sizeof(cli);
+  socklen_t addrlen = sizeof(cli);
 
   /* Accept all queued connections */
   do {

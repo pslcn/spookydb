@@ -9,7 +9,7 @@ enum {
 
 typedef struct {
   size_t buff_capacity, buff_size;
-  uint8_t *buff_content;
+  char *buff_content;
 } buff_t;
 
 typedef struct {
