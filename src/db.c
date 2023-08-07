@@ -16,7 +16,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-#include "spkdb_http.h"
+#include "http_handle.h"
 
 #define LENGTH(X) (sizeof X / sizeof X[0])
 
