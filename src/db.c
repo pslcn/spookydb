@@ -17,6 +17,7 @@
 #include <errno.h>
 
 #include "http_handle.h"
+#include "ftp.h"
 
 #define LENGTH(X) (sizeof X / sizeof X[0])
 
@@ -244,6 +245,9 @@ int main(int argc, char *argv[])
   fd_buff_struct_t serv_pollfd_buffs[NUM_CONNECTIONS];
   parsed_http_req_t parsed_http_reqs[NUM_CONNECTIONS];
   size_t nfds = 1;
+
+  ftp_handler_t ftp_handler;
+  create_ftp_handler(&ftp_handler);
 
   for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
     create_fd_buff_struct(&(serv_pollfd_buffs[i]), BUFFSIZE, BUFFSIZE);
