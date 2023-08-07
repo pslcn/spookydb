@@ -162,48 +162,30 @@ static char *htable_search(htable_t *table, char *key)
 	return NULL;
 }
 
-/* ("tid=%p", pthread_self()) */
 
 static htable_t *ht;
 
 /* DB */
 void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_req)
 {
-	ssize_t rv = 0;
-
+  /* Read into fd_conn->rbuff and parse the HTTP request */
 	fd_conn->rbuff_size = 0;
-
-	/*
-	do {
-		rv = read(fd_conn->fd, &fd_conn->rbuff[fd_conn->rbuff_size], fd_conn->rbuff_capacity - fd_conn->rbuff_size);
-	} while (rv < 0 && errno == EINTR);
-
-	if (rv < 0) 
-		return;
-
-	fd_conn->rbuff_size += (size_t)rv;
-	*/
-
 	read(fd_conn->fd, fd_conn->rbuff, fd_conn->rbuff_capacity);
 	fd_conn->rbuff_size = fd_conn->rbuff_capacity;
-
 	http_parse_req(fd_conn->rbuff, parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body, fd_conn->rbuff_size);
-	fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body);
 
-	/* Handle request method */
+	/* fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body); */
+
 	char resp[RESP_LEN];
-
-	/* Indexing req_path at 1 excludes '/' */
+	/* (Indexing req_path at 1 excludes '/') */
 	if (strncmp(parsed_http_req->req_method, "GET", 4) == 0) {
-		char *value_pointer = htable_search(ht, &parsed_http_req->req_path[1]), *resp_body;
+		char *value_pointer = htable_search(ht, &parsed_http_req->req_path[1]);
 
-		if (value_pointer != NULL) {
-			resp_body = value_pointer;
-		} else {
-			resp_body = "NULL\n";
-		}
-
-		http_write_resp(resp, "200 OK", "Content-Type: text/plain", resp_body);
+    if (value_pointer != NULL) {
+      http_write_resp(resp, "200 OK", "Content-Type: text/plain", value_pointer);
+    } else {
+      http_write_resp(resp, "200 OK", "Content-Type: text/plain", "NULL\n");
+    }
 
 	} else if (strncmp(parsed_http_req->req_method, "PUT", 4) == 0) {
 		htable_insert(ht, &parsed_http_req->req_path[1], parsed_http_req->req_body);
@@ -222,9 +204,9 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
 		}	
 	}
 
+  /* Copy response to fd_conn->wbuff and switch to response state */
 	memcpy(fd_conn->wbuff, &resp, resp_bytes);
 	fd_conn->wbuff_size = resp_bytes;
-
 	fd_conn->state = STATE_RES;
 	http_handle_res(fd_conn);
 }
