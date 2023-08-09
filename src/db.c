@@ -169,7 +169,7 @@ static htable_t *ht;
 /* DB */
 void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_req)
 {
-  /* Read into fd_conn->rbuff and parse the HTTP request */
+  /* Read into fd_conn->rbuff.buff_content and parse the HTTP request */
   fd_conn->rbuff.buff_size = 0;
   read(fd_conn->fd, fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_capacity);
   fd_conn->rbuff.buff_size = fd_conn->rbuff.buff_capacity;
@@ -204,7 +204,7 @@ void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_r
     } 
   }
 
-  /* Copy response to fd_conn->wbuff and switch to response state */
+  /* Copy response to fd_conn->wbuff.buff_content and switch to response state */
   memcpy(fd_conn->wbuff.buff_content, &resp, resp_bytes);
   fd_conn->wbuff.buff_size = resp_bytes;
   fd_conn->state = STATE_RES;
@@ -271,7 +271,6 @@ int main(int argc, char *argv[])
     /* Blocks until pollfd array has been prepared */
     if (prepare_pollfd_array(serv_pollfd_buffs, &(serv_pollfd_array[1]), NUM_CONNECTIONS, &nfds) == 0) {
       if (poll(serv_pollfd_array, nfds, 5000) > 0) {
-        /* Check active connections */
         for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
           if (serv_pollfd_array[i].fd > 0 && serv_pollfd_array[i].revents) {
             if (serv_pollfd_buffs[i - 1].state == STATE_REQ) {

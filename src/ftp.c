@@ -48,3 +48,27 @@ int create_ftp_handler(ftp_handler_t *ftp_handler)
   return 0;
 }
 
+void serve(ftp_handler_t *ftp_handler)
+{
+ size_t nfds = 1; 
+
+  while (1) {
+    if (prepare_pollfd_array(ftp_handler->pollfd_buffs21, &(ftp_handler->pollfd_array21[1]), NUM_CONNECTIONS, &nfds) == 0) {
+      if (poll(ftp_handler->pollfd_array21, nfds, 5000) > 0) {
+        for (size_t i = 1; i < ftp_handler->num_poll_fds; ++i) {
+          if (ftp_handler->pollfd_array21[i].fd > 0 && ftp_handler->pollfd_array21[i].revents) {
+            if (ftp_handler->pollfd_array21[i - 1].fd > 0 && ftp_handler->pollfd_array21[i - 1].state == STATE_END) {
+              close(ftp_handler->pollfd_array21[i - 1].fd);
+              ftp_handler->pollfd_array21[i - 1].fd = 0;
+            }
+          }
+        }
+
+        if (ftp_handler->pollfd_array21[0].revents & POLLIN) {
+          serv_accept_connection(ftp_handler->serv_fd21, ftp_handler->pollfd_buffs21, ftp_handler->num_poll_fds);
+        }
+      }
+    }
+  }
+}
+
