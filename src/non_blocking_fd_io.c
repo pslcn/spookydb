@@ -18,14 +18,14 @@
 
 #include "non_blocking_fd_io.h"
 
-int create_buff(buff_t *buff, size_t buff_capacity)
+int create_buff(struct rw_buff *buff, size_t buff_capacity)
 {
   buff->buff_capacity = buff_capacity;
   buff->buff_content = calloc(buff_capacity, sizeof(char));
   return 0;
 }
 
-int create_fd_buff_struct(fd_buff_struct_t *fd_buff, size_t rbuff_capacity, size_t wbuff_capacity)
+int create_fd_buff_struct(struct fd_buff_handler *fd_buff, size_t rbuff_capacity, size_t wbuff_capacity)
 {
   fd_buff->fd = 0;
   create_buff(&(fd_buff->rbuff), rbuff_capacity); 
@@ -67,7 +67,7 @@ int create_serv_sock(int *serv_fd, struct sockaddr_in *servaddr, int port)
   return 0;
 }
 
-int prepare_pollfd_array(fd_buff_struct_t *fd_buff_structs, struct pollfd *pollfd_array, size_t pollfd_array_size, size_t *nfds)
+int prepare_pollfd_array(struct fd_buff_handler *fd_buff_structs, struct pollfd *pollfd_array, size_t pollfd_array_size, size_t *nfds)
 {
   *nfds = 1;
   for (size_t i = 1; i < pollfd_array_size; ++i) {
@@ -82,7 +82,7 @@ int prepare_pollfd_array(fd_buff_struct_t *fd_buff_structs, struct pollfd *pollf
   return 0;
 }
 
-void serv_accept_connection(int serv_fd, fd_buff_struct_t *fd_buff_structs, size_t fd_buff_structs_size)
+void serv_accept_connection(int serv_fd, struct fd_buff_handler *fd_buff_structs, size_t fd_buff_structs_size)
 {
   int conn_fd = 0;
   struct sockaddr_in cli;

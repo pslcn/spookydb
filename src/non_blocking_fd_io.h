@@ -7,27 +7,28 @@ enum {
   STATE_END = 2,
 };
 
-typedef struct {
+struct rw_buff {
   size_t buff_capacity, buff_size;
   char *buff_content;
-} buff_t;
+};
 
-typedef struct {
+struct fd_buff_handler {
   int fd;
   uint32_t state;
 
-  buff_t rbuff, wbuff;
+  struct rw_buff rbuff, wbuff;
   size_t wbuff_sent;
-} fd_buff_struct_t;
+};
 
-int create_buff(buff_t *buff, size_t buff_capacity);
-int create_fd_buff_struct(fd_buff_struct_t *fd_buff, size_t rbuff_capacity, size_t wbuff_capacity);
+int create_buff(struct rw_buff *buff, size_t buff_capacity);
+int create_fd_buff_handler(struct fd_buff_handler *fd_buff_handler, size_t rbuff_capacity, size_t wbuff_capacity);
 
 int fd_set_non_blocking(int fd);
 int create_serv_sock(int *serv_fd, struct sockaddr_in *servaddr, int port);
 
-int prepare_pollfd_array(fd_buff_struct_t *fd_buff_structs, struct pollfd *pollfd_array, size_t pollfd_array_size, size_t *nfds);
-void serv_accept_connection(int serv_fd, fd_buff_struct_t *fd_buff_structs, size_t fd_buff_structs_size);
+
+int prepare_pollfd_array(struct fd_buff_handler *fd_buff_handlers, struct pollfd *pollfd_array, size_t pollfd_array_size, size_t *nfds);
+void serv_accept_connection(int serv_fd, struct fd_buff_handler *fd_buff_handlers, size_t fd_buff_handlers_size);
 
 #endif
 

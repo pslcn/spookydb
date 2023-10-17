@@ -32,7 +32,7 @@ typedef struct {
   char *req_method, *req_path, *req_body;
 } parsed_http_req_t;
 
-void http_handle_res(fd_buff_struct_t *fd_buff);
+void http_handle_res(struct fd_buff_handler *fd_buff);
 void http_parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size);
 void http_write_resp(char *resp, char *status, char *resp_headers, char *resp_body);
 
@@ -47,7 +47,7 @@ int create_parsed_http_req(parsed_http_req_t *parsed_http_req)
   return 0;
 }
 
-void http_handle_res(fd_buff_struct_t *fd_conn)
+void http_handle_res(struct fd_buff_handler *fd_conn)
 {
   fprintf(stdout, "Sending response of %ld bytes to FD %d\n", fd_conn->wbuff.buff_size, fd_conn->fd);
   ssize_t rv = write(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size);

@@ -166,8 +166,9 @@ static char *htable_search(htable_t *table, char *key)
 
 static htable_t *ht;
 
+
 /* DB */
-void http_handle_req(fd_buff_struct_t *fd_conn, parsed_http_req_t *parsed_http_req)
+void http_handle_req(struct fd_buff_handler *fd_conn, parsed_http_req_t *parsed_http_req)
 {
   /* Read into fd_conn->rbuff.buff_content and parse the HTTP request */
   fd_conn->rbuff.buff_size = 0;
@@ -242,7 +243,7 @@ int main(int argc, char *argv[])
   struct sockaddr_in servaddr;
 
   struct pollfd serv_pollfd_array[NUM_CONNECTIONS];
-  fd_buff_struct_t serv_pollfd_buffs[NUM_CONNECTIONS];
+  struct fd_buff_handler serv_pollfd_buffs[NUM_CONNECTIONS];
   parsed_http_req_t parsed_http_reqs[NUM_CONNECTIONS];
   size_t nfds = 1;
 

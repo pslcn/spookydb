@@ -7,7 +7,7 @@ typedef struct {
 
   size_t num_poll_fds;
   struct pollfd *pollfd_array21, *pollfd_array20;
-  fd_buff_struct_t *pollfd_buffs21, *pollfd_buffs20;
+  struct fd_buff_handler *pollfd_buffs21, *pollfd_buffs20;
 } ftp_handler_t;
 
 int create_ftp_handler(ftp_handler_t *ftp_handler);

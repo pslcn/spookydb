@@ -38,9 +38,9 @@ int create_ftp_handler(ftp_handler_t *ftp_handler)
   ftp_handler->pollfd_array21[0].fd = ftp_handler->serv_fd21;
   ftp_handler->pollfd_array21[0].events = POLLIN;
 
-  ftp_handler->pollfd_buffs21 = malloc(sizeof(fd_buff_struct_t) * ftp_handler->num_poll_fds);
-  ftp_handler->pollfd_buffs20 = malloc(sizeof(fd_buff_struct_t) * ftp_handler->num_poll_fds);
-  fprintf(stdout, "Allocated %zu bytes for pollfd_buffs21 and pollfd_buffs20\n", sizeof(fd_buff_struct_t) * ftp_handler->num_poll_fds * 2);
+  ftp_handler->pollfd_buffs21 = malloc(sizeof(struct fd_buff_handler) * ftp_handler->num_poll_fds);
+  ftp_handler->pollfd_buffs20 = malloc(sizeof(struct fd_buff_handler) * ftp_handler->num_poll_fds);
+  fprintf(stdout, "Allocated %zu bytes for pollfd_buffs21 and pollfd_buffs20\n", sizeof(struct fd_buff_handler) * ftp_handler->num_poll_fds * 2);
   for (size_t i = 0; i < ftp_handler->num_poll_fds; ++i) {
     create_fd_buff_struct(&(ftp_handler->pollfd_buffs21[i]), BUFFSIZE, BUFFSIZE);
     create_fd_buff_struct(&(ftp_handler->pollfd_buffs20[i]), BUFFSIZE, BUFFSIZE);
@@ -57,7 +57,7 @@ void serve(ftp_handler_t *ftp_handler)
       if (poll(ftp_handler->pollfd_array21, nfds, 5000) > 0) {
         for (size_t i = 1; i < ftp_handler->num_poll_fds; ++i) {
           if (ftp_handler->pollfd_array21[i].fd > 0 && ftp_handler->pollfd_array21[i].revents) {
-            if (ftp_handler->pollfd_array21[i - 1].fd > 0 && ftp_handler->pollfd_array21[i - 1].state == STATE_END) {
+            if (ftp_handler->pollfd_array21[i - 1].fd > 0 && ftp_handler->pollfd_buffs21[i - 1].state == STATE_END) {
               close(ftp_handler->pollfd_array21[i - 1].fd);
               ftp_handler->pollfd_array21[i - 1].fd = 0;
             }
