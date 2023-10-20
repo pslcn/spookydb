@@ -265,7 +265,7 @@ int main(int argc, char *argv[])
 
   /* Testing with hash table */
   create_htable(&ht);
-  htable_insert(ht, "Hello", "World");
+  /* htable_insert(ht, "Hello", "World"); */
 
   /* Event loop */
   while (1) {
