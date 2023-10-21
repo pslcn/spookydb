@@ -25,7 +25,7 @@ int create_buff(struct rw_buff *buff, size_t buff_capacity)
   return 0;
 }
 
-int create_fd_buff_struct(struct fd_buff_handler *fd_buff, size_t rbuff_capacity, size_t wbuff_capacity)
+int create_fd_buff_handler(struct fd_buff_handler *fd_buff, size_t rbuff_capacity, size_t wbuff_capacity)
 {
   fd_buff->fd = 0;
   create_buff(&(fd_buff->rbuff), rbuff_capacity); 

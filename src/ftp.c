@@ -42,8 +42,8 @@ int create_ftp_handler(ftp_handler_t *ftp_handler)
   ftp_handler->pollfd_buffs20 = malloc(sizeof(struct fd_buff_handler) * ftp_handler->num_poll_fds);
   fprintf(stdout, "Allocated %zu bytes for pollfd_buffs21 and pollfd_buffs20\n", sizeof(struct fd_buff_handler) * ftp_handler->num_poll_fds * 2);
   for (size_t i = 0; i < ftp_handler->num_poll_fds; ++i) {
-    create_fd_buff_struct(&(ftp_handler->pollfd_buffs21[i]), BUFFSIZE, BUFFSIZE);
-    create_fd_buff_struct(&(ftp_handler->pollfd_buffs20[i]), BUFFSIZE, BUFFSIZE);
+    create_fd_buff_handler(&(ftp_handler->pollfd_buffs21[i]), BUFFSIZE, BUFFSIZE);
+    create_fd_buff_handler(&(ftp_handler->pollfd_buffs20[i]), BUFFSIZE, BUFFSIZE);
   }
   return 0;
 }

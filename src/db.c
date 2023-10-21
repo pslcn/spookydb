@@ -16,156 +16,13 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
+#include "hashtable.h"
 #include "http_handle.h"
 #include "ftp.h"
 
 #define LENGTH(X) (sizeof X / sizeof X[0])
 
-#define CAPACITY 50000
-
-typedef struct {
-  char *key, *value;
-  size_t key_size, value_size;
-} ht_item_t;
-
-typedef struct {
-  ht_item_t **items;
-  int size, count;
-} htable_t;
-
-static void hash_func(unsigned long *hash, char *str) 
-{
-  unsigned long i = 0;
-
-  for (size_t j = 0; str[j]; ++j) 
-    i += str[j];
-  *hash = i % CAPACITY; 
-}
-
-static void create_ht_item(ht_item_t **item, char *key, char *value)
-{
-  *item = malloc(sizeof(ht_item_t));
-  (*item)->key = malloc(sizeof(char) * (strlen(key) + 1));
-  (*item)->value = malloc(sizeof(char) * (strlen(value) + 1));
-  strncpy((*item)->key, key, strlen(key));
-  strncpy((*item)->value, value, strlen(value));
-
-  (*item)->key_size = sizeof(char) * (strlen(key) + 1);
-  (*item)->value_size = sizeof(char) * (strlen(value) + 1);
-
-  fprintf(stdout, "[ht_item_t %p]: [Key (%ld bytes, at %p): '%s'] [Value (%ld bytes, at %p): '%s']\n", *item, (*item)->key_size, (*item)->key, (*item)->key, (*item)->value_size, (*item)->value, (*item)->value);
-}
-
-static void create_htable(htable_t **table)
-{
-  *table = malloc(sizeof(htable_t));
-  (*table)->size = CAPACITY;
-  (*table)->count = 0;
-  (*table)->items = calloc((*table)->size, sizeof(ht_item_t*));
-
-  for (size_t i = 0; i < (*table)->size; ++i)
-    (*table)->items[i] = NULL;
-}
-
-static void free_ht_item(ht_item_t *item)
-{
-  free(item->key);
-  free(item->value);
-  free(item);
-}
-
-static void free_htable(htable_t *table)
-{
-  ht_item_t *item;
-  for (size_t i = 0; i < table->size; ++i) {
-    item = table->items[i];
-    if (item != NULL)
-      free_ht_item(item);
-  }
-  free(table->items);
-  free(table);
-}
-
-static void handle_ht_collision(htable_t *table, ht_item_t *item)
-{
-  fprintf(stdout, "Collision!\n");
-}
-
-static void htable_insert(htable_t *table, char *key, char *value)
-{
-  fprintf(stdout, "(htable_insert) Inserting value '%s' in key '%s'\n", value, key); 
-  ht_item_t *item, *current;
-  unsigned long idx;
-  create_ht_item(&item, key, value);
-  hash_func(&idx, key);
-  current = table->items[idx];
-  if (current == NULL) {
-    if (table->count == table->size) {
-      fprintf(stdout, "Table is full!\n");
-      free_ht_item(item);
-      return;
-    }
-    /* fprintf(stdout, "(htable_insert) Storing item at %p in table->items[%d]\n", item, idx); */
-    table->items[idx] = item;
-    table->count++;
-
-  } else if (strncmp(current->key, key, strlen(key)) == 0) {
-    strncpy(table->items[idx]->value, value, strlen(value));
-  } else {
-    handle_ht_collision(table, item);
-  }
-}
-
-static int htable_remove(htable_t *table, char *key)
-{
-  unsigned long idx;
-  ht_item_t *current;
-  hash_func(&idx, key);
-  current = table->items[idx];
-
-  fprintf(stdout, "Deleting key '%s' at %p\n", key, current);
-
-  if ((current != NULL) && (strncmp(current->key, key, strlen(key)) == 0)) {
-    table->items[idx] = NULL;
-    table->count--;
-    free_ht_item(current);
-    return 0;
-  } else 
-    return 1;
-}
-
-static char *htable_search(htable_t *table, char *key) 
-{
-  unsigned long idx;
-  ht_item_t *item;
-
-  hash_func(&idx, key);
-  item = table->items[idx];
-
-  /* fprintf(stdout, "(htable_search) Searching %p in table->items[%ld] for key '%s'\n", item, idx, key); */
-
-  if (item == NULL)
-    return NULL;
-
-  fprintf(stdout, "(htable_search) Has key with %ld bytes\n", item->key_size);
-  fprintf(stdout, "(htable_search) Has value with %ld bytes\n", item->value_size);
-
-  if ((item->key_size > 0) && (item->value_size > 0)) {
-    fprintf(stdout, "(htable_search) Searching key at %p\n", item->key);
-
-    if (strncmp(item->key, key, strlen(key)) == 0) {
-      fprintf(stdout, "(htable_search) Found value '%s' in key '%s'\n", item->value, item->key);
-
-      return item->value;
-    } 
-  }
-
-  return NULL;
-}
-
-
-static htable_t *ht;
-
+static struct htable *ht;
 
 /* DB */
 void http_handle_req(struct fd_buff_handler *fd_conn, parsed_http_req_t *parsed_http_req)
@@ -251,7 +108,7 @@ int main(int argc, char *argv[])
   create_ftp_handler(&ftp_handler);
 
   for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-    create_fd_buff_struct(&(serv_pollfd_buffs[i]), BUFFSIZE, BUFFSIZE);
+    create_fd_buff_handler(&(serv_pollfd_buffs[i]), BUFFSIZE, BUFFSIZE);
     create_parsed_http_req(&(parsed_http_reqs[i])); 
   }
 
