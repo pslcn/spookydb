@@ -35,10 +35,24 @@ int create_fd_buff_handler(struct fd_buff_handler *fd_buff, size_t rbuff_capacit
 
 void fd_buff_write_content(struct fd_buff_handler *fd_conn)
 {
-  fprintf(stdout, "Sending response of %ld bytes to FD %d\n", fd_conn->wbuff.buff_size, fd_conn->fd);
+  ssize_t rv = 0;
+  size_t bytes_written = 0;
 
-  ssize_t rv = write(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size);
+  do {
+    rv = write(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size - bytes_written);
 
+    if (rv != -1) {
+      bytes_written += rv;
+    } else {
+      if (errno == EAGAIN) {
+        break;
+      }
+
+      fprintf(stderr, "[fd_buff_write_content] Error writing to FD: %s\n", strerror(errno));
+    }
+  } while (rv > 0);
+
+  fprintf(stdout, "Sent response of %ld bytes to FD %d\n", fd_conn->wbuff.buff_size, fd_conn->fd);
   fd_conn->state = STATE_END;
 }
 
