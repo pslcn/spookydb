@@ -39,7 +39,7 @@ void fd_buff_write_content(struct fd_buff_handler *fd_conn)
   size_t bytes_written = 0;
 
   do {
-    rv = write(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size - bytes_written);
+    rv = send(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size - bytes_written, 0);
 
     if (rv != -1) {
       bytes_written += rv;
@@ -62,7 +62,7 @@ void fd_buff_buffered_read(struct fd_buff_handler *fd_conn)
   fd_conn->rbuff.buff_size = 0;
 
   do {
-    bytes_read = read(fd_conn->fd, fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_capacity - fd_conn->rbuff.buff_size);
+    bytes_read = recv(fd_conn->fd, fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_capacity - fd_conn->rbuff.buff_size, 0);
 
     if (bytes_read != -1) {
       fd_conn->rbuff.buff_size += bytes_read;
