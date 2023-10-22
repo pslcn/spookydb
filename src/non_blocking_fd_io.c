@@ -42,6 +42,26 @@ void fd_buff_write_content(struct fd_buff_handler *fd_conn)
   fd_conn->state = STATE_END;
 }
 
+void fd_buff_buffered_read(struct fd_buff_handler *fd_conn)
+{
+  ssize_t bytes_read = 0;
+  fd_conn->rbuff.buff_size = 0;
+
+  do {
+    bytes_read = read(fd_conn->fd, fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_capacity - fd_conn->rbuff.buff_size);
+
+    if (bytes_read != -1) {
+      fd_conn->rbuff.buff_size += bytes_read;
+    } else {
+      if (errno == EAGAIN) {
+        break;
+      }
+
+      fprintf(stderr, "[fd_buff_buffered_read] Error reading from FD:  %s\n", strerror(errno));
+    }
+  } while (bytes_read > 0);
+}
+
 int fd_set_non_blocking(int fd)
 {
   int flags = fcntl(fd, F_GETFL, 0);
