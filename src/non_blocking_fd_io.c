@@ -33,6 +33,15 @@ int create_fd_buff_handler(struct fd_buff_handler *fd_buff, size_t rbuff_capacit
   return 0;
 }
 
+void fd_buff_write_content(struct fd_buff_handler *fd_conn)
+{
+  fprintf(stdout, "Sending response of %ld bytes to FD %d\n", fd_conn->wbuff.buff_size, fd_conn->fd);
+
+  ssize_t rv = write(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size);
+
+  fd_conn->state = STATE_END;
+}
+
 int fd_set_non_blocking(int fd)
 {
   int flags = fcntl(fd, F_GETFL, 0);
