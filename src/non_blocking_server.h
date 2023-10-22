@@ -1,5 +1,5 @@
-#ifndef NON_BLOCKING_FD_IO_H_
-#define NON_BLOCKING_FD_IO_H_
+#ifndef NON_BLOCKING_SERVER_H_
+#define NON_BLOCKING_SERVER_H_
 
 enum {
   STATE_REQ = 0,

@@ -16,18 +16,10 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-#include "non_blocking_fd_io.h"
+#include "non_blocking_server.h"
+#include "http.h"
 
 #define LENGTH(X) (sizeof X / sizeof X[0])
-
-#define BUFFSIZE 1024
-#define NUM_CONNECTIONS 32
-
-#define RESP_LEN 1024
-
-struct parsed_http_req {
-  char *req_method, *req_path, *req_body;
-};
 
 /* Only supports GET, PUT, and DELETE; DELETE is 6 characters */
 int create_parsed_http_req(struct parsed_http_req *parsed_http_req)
