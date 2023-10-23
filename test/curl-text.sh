@@ -1,7 +1,7 @@
 #!/bin/sh
 
-curl --http0.9 -X PUT localhost:8080/akey -d avalue
-curl --http0.9 localhost:8080/Hello
-curl --http0.9 -X DELETE localhost:8080/akey
-curl --http0.9 localhost:8080/akey
-curl --http0.9 -X DELETE localhost:8080/Hello
+curl -X PUT localhost:8080/akey -d avalue
+curl localhost:8080/Hello
+curl -X DELETE localhost:8080/akey
+curl localhost:8080/akey
+curl -X DELETE localhost:8080/Hello
