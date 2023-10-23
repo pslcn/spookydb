@@ -30,12 +30,22 @@ int create_parsed_http_req(struct parsed_http_req *parsed_http_req)
   return 0;
 }
 
+void clear_parsed_http_req(struct parsed_http_req *parsed_http_req)
+{
+  memset(parsed_http_req->req_method, 0, 6);
+  memset(parsed_http_req->req_path, 0, BUFFSIZE);
+  memset(parsed_http_req->req_body, 0, BUFFSIZE);
+}
+
 void http_parse_req(char *req, struct parsed_http_req *parsed_http_req, size_t content_buff_size)
 {
   /* Number of spaces */
   int spaces = 0;
   /* Whether string is request body */
   int isbody = 0;
+
+  /* Reset contents */
+  clear_parsed_http_req(parsed_http_req);
 
   for (size_t c = 0; c < content_buff_size; ++c) {
     if (spaces == 0) {
