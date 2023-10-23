@@ -30,32 +30,33 @@ int create_parsed_http_req(struct parsed_http_req *parsed_http_req)
   return 0;
 }
 
-
-void http_parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size)
+void http_parse_req(char *req, struct parsed_http_req *parsed_http_req, size_t content_buff_size)
 {
-  /* Number of spaces; whether string is request body */
-  int spaces = 0, isbody = 0;
+  /* Number of spaces */
+  int spaces = 0;
+  /* Whether string is request body */
+  int isbody = 0;
 
   for (size_t c = 0; c < content_buff_size; ++c) {
     if (spaces == 0) {
-      if (req[c] != ' ') 
-        req_method[c] = req[c]; 
+      if (req[c] != ' ')
+        parsed_http_req->req_method[c] = req[c];
       else {
-        req_method[c] = '\0';
+        parsed_http_req->req_method[c] = '\0';
         spaces = c + 1;
       }
     } else {
-      if (req[c] != ' ') 
-        req_path[c - spaces] = req[c];
+      if (req[c] != ' ')
+        parsed_http_req->req_path[c - spaces] = req[c];
       else {
-        req_path[c - spaces] = '\0';
+        parsed_http_req->req_path[c - spaces] = '\0';
         break;
       }
     }
   }
 
   /* Parse request body */
-  if (strncmp(req_method, "PUT", 4) == 0) {
+  if (strncmp(parsed_http_req->req_method, "PUT", 4) == 0) {
     for (size_t c = 0; c < content_buff_size; ++c) {
       if (isbody == 0) {
         if ((req[c] == '\n') && (req[c + 2] == '\n')) {
@@ -63,12 +64,12 @@ void http_parse_req(char *req, char *req_method, char *req_path, char *req_body,
           isbody = c + 1;
         }
       } else {
-        req_body[c - isbody] = req[c];
+        parsed_http_req->req_body[c - isbody] = req[c];
       }
     }
-    req_body[(content_buff_size - isbody) + 1] = '\0';
+    parsed_http_req->req_body[(content_buff_size - isbody) + 1] = '\0';
   } else 
-    strncpy(req_body, "NULL", 5); 
+    memcpy(parsed_http_req->req_body, "NULL", 5);
 }
 
 
@@ -129,7 +130,7 @@ void http_handle_req(struct fd_buff_handler *fd_conn, struct parsed_http_req *pa
   /* Read into fd_conn->rbuff.buff_content and parse the HTTP request */
   fd_buff_buffered_read(fd_conn);
 
-  http_parse_req(fd_conn->rbuff.buff_content, parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body, fd_conn->rbuff.buff_size);
+  http_parse_req(fd_conn->rbuff.buff_content, parsed_http_req, fd_conn->rbuff.buff_size);
   fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body); 
 
   char resp[RESP_LEN];

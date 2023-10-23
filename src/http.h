@@ -10,7 +10,7 @@ struct parsed_http_req {
 };
 
 int create_parsed_http_req(struct parsed_http_req *parsed_http_req);
-void http_parse_req(char *req, char *req_method, char *req_path, char *req_body, size_t content_buff_size);
+void http_parse_req(char *req, struct parsed_http_req *parsed_http_req, size_t content_buff_size);
 void http_format_resp(char *resp, char *status, char *resp_headers, char *resp_body);
 void http_handle_req(struct fd_buff_handler *fd_conn, struct parsed_http_req *parsed_http_req);
 
