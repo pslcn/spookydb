@@ -37,17 +37,93 @@ void clear_parsed_http_req(struct parsed_http_req *parsed_http_req)
   memset(parsed_http_req->req_body, 0, BUFFSIZE);
 }
 
-void http_parse_req(char *req, struct parsed_http_req *parsed_http_req, size_t content_buff_size)
-{
-  /* Number of spaces */
-  int spaces = 0;
-  /* Whether string is request body */
-  int isbody = 0;
 
-  /* Reset contents */
+
+struct http_header {
+  char *header_name, *header_value;
+  size_t header_name_size, header_value_size;
+};
+
+/* Returns idx of next header, which could be the request body */
+static size_t parse_headers_step(char *req, size_t req_size, struct http_header *curr_header, size_t start_idx)
+{
+  size_t on_header_value = 0;
+  size_t idx_header_value;
+
+  for (size_t i = start_idx; i < req_size; ++i) {
+    if (on_header_value == 0) {
+      if (req[i] != ':') {
+        curr_header->header_name[i - start_idx] = req[i];
+      } else {
+        curr_header->header_name[i - start_idx] = '\0';
+        curr_header->header_name_size = i - start_idx;
+        on_header_value = 1;
+      }
+
+    /* The HTTP/1.1 specification permits applications to use more spaces or no spaces between the colon and the header value */
+    } else if (on_header_value == 1) {
+      if (req[i] != ' ') {
+        idx_header_value = i;
+        curr_header->header_value[i - idx_header_value] = req[i];
+        on_header_value = 2;
+      } 
+
+    /* Get header value */
+    } else {
+      if (req[i] != '\r' && req[i + 1] != '\n') {
+        curr_header->header_value[i - idx_header_value] = req[i];
+      } else {
+        curr_header->header_value[i - idx_header_value] = '\0';
+        curr_header->header_value_size = i - idx_header_value;
+
+        return i + 2;
+      }
+    }
+  }
+}
+
+void clear_http_header(struct http_header *curr_header)
+{
+  memset(curr_header->header_name, 0, BUFFSIZE);
+  memset(curr_header->header_value, 0, BUFFSIZE);
+  curr_header->header_name_size = 0;
+  curr_header->header_value_size = 0;
+}
+
+/* Returns idx of request body */
+static size_t http_parse_headers(char *req, size_t req_size, size_t start_idx) 
+{
+  struct http_header curr_header;
+
+  curr_header.header_name = malloc(sizeof(char) * BUFFSIZE);
+  curr_header.header_value = malloc(sizeof(char) * BUFFSIZE);
+
+  size_t next_idx = start_idx;
+  while (1) {
+    /* At request body */
+    if (req[next_idx] == '\r' && req[next_idx + 1] == '\n') {
+      return next_idx + 2;
+
+    } else {
+      clear_http_header(&curr_header);
+      next_idx = parse_headers_step(req, req_size, &curr_header, next_idx);
+
+      fprintf(stdout, "[http_parse_headers] Name: %s Value: %s\n", curr_header.header_name, curr_header.header_value);
+
+      if (strncmp(curr_header.header_name, "Content-Type", 13) == 0) { 
+        fprintf(stdout, "[http_parse_headers] Content-Type is: %s\n", curr_header.header_value);
+      }
+    }
+  }
+}
+
+static size_t http_parse_message_line(char *req, size_t req_size, struct parsed_http_req *parsed_http_req)
+{
   clear_parsed_http_req(parsed_http_req);
 
-  for (size_t c = 0; c < content_buff_size; ++c) {
+  int spaces = 0;
+
+  for (size_t c = 0; c < req_size; ++c) {
     if (spaces == 0) {
       if (req[c] != ' ')
         parsed_http_req->req_method[c] = req[c];
@@ -60,27 +136,35 @@ void http_parse_req(char *req, struct parsed_http_req *parsed_http_req, size_t c
         parsed_http_req->req_path[c - spaces] = req[c];
       else {
         parsed_http_req->req_path[c - spaces] = '\0';
-        break;
+
+        /* Find CRLF */
+        for (size_t i = c; i < req_size; ++i) {
+          if (req[i] == '\r' && req[i + 1] == '\n') {
+            return i + 2;
+          }
+        }
       }
     }
   }
+}
+
+void http_parse_req(char *req, size_t req_size, struct parsed_http_req *parsed_http_req) 
+{
+  size_t idx_headers = http_parse_message_line(req, req_size, parsed_http_req);
+
+  size_t idx_req_body = http_parse_headers(req, req_size, idx_headers);
 
   /* Parse request body */
   if (strncmp(parsed_http_req->req_method, "PUT", 4) == 0) {
-    for (size_t c = 0; c < content_buff_size; ++c) {
-      if (isbody == 0) {
-        if ((req[c] == '\n') && (req[c + 2] == '\n')) {
-          c += 2;
-          isbody = c + 1;
-        }
-      } else {
-        parsed_http_req->req_body[c - isbody] = req[c];
-      }
+    for (size_t c = idx_req_body; c < req_size; ++c) {
+      parsed_http_req->req_body[c - idx_req_body] = req[c];
     }
-    parsed_http_req->req_body[(content_buff_size - isbody) + 1] = '\0';
-  } else 
+    parsed_http_req->req_body[(req_size - idx_req_body) + 1] = '\0';
+  } else {
     memcpy(parsed_http_req->req_body, "NULL", 5);
+  }
 }
+
 
 
 void http_format_resp(char *resp, char *status, char *resp_headers, char *resp_body)
@@ -140,7 +224,7 @@ void http_handle_req(struct fd_buff_handler *fd_conn, struct parsed_http_req *pa
   /* Read into fd_conn->rbuff.buff_content and parse the HTTP request */
   fd_buff_buffered_read(fd_conn);
 
-  http_parse_req(fd_conn->rbuff.buff_content, parsed_http_req, fd_conn->rbuff.buff_size);
+  http_parse_req(fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_size, parsed_http_req);
   fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body); 
 
   char resp[RESP_LEN];
@@ -206,7 +290,7 @@ int main(void)
 
             /* Clean up array */
             if (serv_pollfd_buffs[i - 1].fd > 0 && serv_pollfd_buffs[i - 1].state == STATE_END) {
-              fprintf(stdout, "%p: Closing FD %d in serv_pollfd_buffs[%ld]\n", serv_pollfd_buffs + (i - 1), serv_pollfd_buffs[i - 1].fd, i - 1);
+              /* fprintf(stdout, "%p: Closing FD %d in serv_pollfd_buffs[%ld]\n", serv_pollfd_buffs + (i - 1), serv_pollfd_buffs[i - 1].fd, i - 1); */
 
               close(serv_pollfd_buffs[i - 1].fd);
               serv_pollfd_buffs[i - 1].fd = 0;
