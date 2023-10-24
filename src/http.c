@@ -155,13 +155,13 @@ void http_parse_req(char *req, size_t req_size, struct parsed_http_req *parsed_h
   size_t idx_req_body = http_parse_headers(req, req_size, idx_headers);
 
   /* Parse request body */
-  if (strncmp(parsed_http_req->req_method, "PUT", 4) == 0) {
+  if (req[idx_req_body] == '\r' && req[idx_req_body + 1] == '\n') {
+    memcpy(parsed_http_req->req_body, "", 1);
+  } else {
     for (size_t c = idx_req_body; c < req_size; ++c) {
       parsed_http_req->req_body[c - idx_req_body] = req[c];
     }
-    parsed_http_req->req_body[(req_size - idx_req_body) + 1] = '\0';
-  } else {
-    memcpy(parsed_http_req->req_body, "NULL", 5);
+    parsed_http_req->req_body[req_size - idx_req_body] = '\0';
   }
 }
 
