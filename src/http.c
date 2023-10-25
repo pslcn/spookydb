@@ -37,82 +37,55 @@ void clear_parsed_http_req(struct parsed_http_req *parsed_http_req)
   memset(parsed_http_req->req_body, 0, BUFFSIZE);
 }
 
-
-
-struct http_header {
-  char *header_name, *header_value;
-  size_t header_name_size, header_value_size;
-};
-
-/* Returns idx of next header, which could be the request body */
-static size_t parse_headers_step(char *req, size_t req_size, struct http_header *curr_header, size_t start_idx)
+static size_t http_header_value_start(char *req, size_t req_size, size_t start_idx)
 {
-  size_t on_header_value = 0;
-  size_t idx_header_value;
+  size_t after_colon = 0;
 
   for (size_t i = start_idx; i < req_size; ++i) {
-    if (on_header_value == 0) {
-      if (req[i] != ':') {
-        curr_header->header_name[i - start_idx] = req[i];
-      } else {
-        curr_header->header_name[i - start_idx] = '\0';
-        curr_header->header_name_size = i - start_idx;
-        on_header_value = 1;
+    if (after_colon == 0) {
+      if (req[i] == ':') {
+        after_colon = 1;
       }
-
-    /* The HTTP/1.1 specification permits applications to use more spaces or no spaces between the colon and the header value */
-    } else if (on_header_value == 1) {
-      if (req[i] != ' ') {
-        idx_header_value = i;
-        curr_header->header_value[i - idx_header_value] = req[i];
-        on_header_value = 2;
-      } 
-
-    /* Get header value */
     } else {
-      if (req[i] != '\r' && req[i + 1] != '\n') {
-        curr_header->header_value[i - idx_header_value] = req[i];
-      } else {
-        curr_header->header_value[i - idx_header_value] = '\0';
-        curr_header->header_value_size = i - idx_header_value;
-
-        return i + 2;
+      /* The HTTP/1.1 specification permits applications to use more spaces or no spaces between the colon and the header value */
+      if (req[i] != ' ') {
+        return i;
       }
     }
   }
 }
 
-void clear_http_header(struct http_header *curr_header)
+static size_t http_header_crlf_idx(char *req, size_t req_size, size_t start_idx)
 {
-  memset(curr_header->header_name, 0, BUFFSIZE);
-  memset(curr_header->header_value, 0, BUFFSIZE);
-  curr_header->header_name_size = 0;
-  curr_header->header_value_size = 0;
+  for (size_t i = start_idx; i < req_size; ++i) {
+    if (req[i] == '\r' && req[i + 1] == '\n') {
+      return i;
+    }
+  }
 }
 
 /* Returns idx of request body */
-static size_t http_parse_headers(char *req, size_t req_size, size_t start_idx) 
+static size_t http_parse_headers(char *req, size_t req_size, size_t start_idx)
 {
-  struct http_header curr_header;
-
-  curr_header.header_name = malloc(sizeof(char) * BUFFSIZE);
-  curr_header.header_value = malloc(sizeof(char) * BUFFSIZE);
-
   size_t next_idx = start_idx;
+  size_t header_value_idx, header_crlf_idx;
+
   while (1) {
-    /* At request body */
     if (req[next_idx] == '\r' && req[next_idx + 1] == '\n') {
       return next_idx + 2;
-
     } else {
-      clear_http_header(&curr_header);
-      next_idx = parse_headers_step(req, req_size, &curr_header, next_idx);
-
-      fprintf(stdout, "[http_parse_headers] Name: %s Value: %s\n", curr_header.header_name, curr_header.header_value);
-
-      if (strncmp(curr_header.header_name, "Content-Type", 13) == 0) { 
-        fprintf(stdout, "[http_parse_headers] Content-Type is: %s\n", curr_header.header_value);
+      if (strncmp(&req[next_idx], "Content-Type", 12) == 0) {
+        header_value_idx = http_header_value_start(req, req_size, next_idx);
+        header_crlf_idx = http_header_crlf_idx(req, req_size, header_value_idx);
+        char value[128];
+        memcpy(value, &req[header_value_idx], header_crlf_idx - header_value_idx);
+        value[header_crlf_idx - header_value_idx] = '\0';
+        fprintf(stdout, "[http_parse_headers] Value: %s\n", value);
+      } else {
+        header_crlf_idx = http_header_crlf_idx(req, req_size, next_idx);
       }
+
+      next_idx += header_crlf_idx + 2;
     }
   }
 }
@@ -148,13 +121,13 @@ static size_t http_parse_message_line(char *req, size_t req_size, struct parsed_
   }
 }
 
-void http_parse_req(char *req, size_t req_size, struct parsed_http_req *parsed_http_req) 
+void http_parse_req(char *req, size_t req_size, struct parsed_http_req *parsed_http_req)
 {
-  size_t idx_headers = http_parse_message_line(req, req_size, parsed_http_req);
+  size_t idx_headers, idx_req_body;
 
-  size_t idx_req_body = http_parse_headers(req, req_size, idx_headers);
+  idx_headers = http_parse_message_line(req, req_size, parsed_http_req);
+  idx_req_body = http_parse_headers(req, req_size, idx_headers);
 
-  /* Parse request body */
   if (req[idx_req_body] == '\r' && req[idx_req_body + 1] == '\n') {
     memcpy(parsed_http_req->req_body, "", 1);
   } else {
