@@ -55,11 +55,12 @@ static size_t http_header_value_start(char *req, size_t req_size, size_t start_i
   }
 }
 
-static size_t http_header_crlf_idx(char *req, size_t req_size, size_t start_idx)
+static void http_get_header_crlf_idx(char *req, size_t req_size, size_t start_idx, size_t *crlf_idx)
 {
   for (size_t i = start_idx; i < req_size; ++i) {
     if (req[i] == '\r' && req[i + 1] == '\n') {
-      return i;
+      *crlf_idx = i;
+      return;
     }
   }
 }
@@ -74,18 +75,17 @@ static size_t http_parse_headers(char *req, size_t req_size, size_t start_idx)
     if (req[next_idx] == '\r' && req[next_idx + 1] == '\n') {
       return next_idx + 2;
     } else {
-      if (strncmp(&req[next_idx], "Content-Type", 12) == 0) {
-        header_value_idx = http_header_value_start(req, req_size, next_idx);
-        header_crlf_idx = http_header_crlf_idx(req, req_size, header_value_idx);
-        char value[128];
-        memcpy(value, &req[header_value_idx], header_crlf_idx - header_value_idx);
-        value[header_crlf_idx - header_value_idx] = '\0';
-        fprintf(stdout, "[http_parse_headers] Value: %s\n", value);
-      } else {
-        header_crlf_idx = http_header_crlf_idx(req, req_size, next_idx);
-      }
+      http_get_header_crlf_idx(req, req_size, next_idx, &header_crlf_idx);
 
-      next_idx += header_crlf_idx + 2;
+      if (header_crlf_idx - next_idx > 12 && strncmp(&req[next_idx], "Content-Type", 12) == 0) {
+        header_value_idx = http_header_value_start(req, req_size, next_idx);
+        // char value[128];
+        // memcpy(value, &req[header_value_idx], header_crlf_idx - header_value_idx);
+        // value[header_crlf_idx - header_value_idx] = '\0';
+        // fprintf(stdout, "[http_parse_headers] Value: %s\n", value);
+      } 
+
+      next_idx = header_crlf_idx + 2;
     }
   }
 }
