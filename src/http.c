@@ -193,7 +193,6 @@ void http_format_resp(char *resp, char *status, char *resp_headers, char *resp_b
 
 void http_handle_req(struct fd_buff_handler *fd_conn, struct parsed_http_req *parsed_http_req)
 {
-  /* Read into fd_conn->rbuff.buff_content and parse the HTTP request */
   fd_buff_buffered_read(fd_conn);
 
   http_parse_req(fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_size, parsed_http_req);

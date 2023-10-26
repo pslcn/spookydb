@@ -72,7 +72,6 @@ void fd_buff_write_content(struct fd_buff_handler *fd_conn)
 void fd_buff_buffered_read(struct fd_buff_handler *fd_conn)
 {
   ssize_t bytes_read = 0;
-  // fd_conn->rbuff.buff_size = 0;
 
   do {
     bytes_read = recv(fd_conn->fd, fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_capacity - fd_conn->rbuff.buff_size, 0);
@@ -81,6 +80,7 @@ void fd_buff_buffered_read(struct fd_buff_handler *fd_conn)
       fd_conn->rbuff.buff_size += bytes_read;
     } else {
       if (errno == EAGAIN) {
+        fprintf(stderr, "[fd_buff_buffered_read] EAGAIN\n");
         break;
       }
 
