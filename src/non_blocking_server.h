@@ -22,6 +22,9 @@ struct fd_buff_handler {
 
 int create_buff(struct rw_buff *buff, size_t buff_capacity);
 int create_fd_buff_handler(struct fd_buff_handler *fd_buff_handler, size_t rbuff_capacity, size_t wbuff_capacity);
+void clear_rw_buff(struct rw_buff *buff);
+void clear_fd_buff_handler(struct fd_buff_handler *fd_buff_handler);
+
 void fd_buff_write_content(struct fd_buff_handler *fd_conn);
 void fd_buff_buffered_read(struct fd_buff_handler *fd_conn);
 

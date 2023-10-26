@@ -33,16 +33,29 @@ int create_fd_buff_handler(struct fd_buff_handler *fd_buff, size_t rbuff_capacit
   return 0;
 }
 
+void clear_rw_buff(struct rw_buff *buff)
+{
+  buff->buff_size = 0;
+  memset(buff->buff_content, 0, buff->buff_capacity);
+}
+
+void clear_fd_buff_handler(struct fd_buff_handler *fd_buff)
+{
+  fd_buff->fd = 0;
+  clear_rw_buff(&fd_buff->rbuff);
+  clear_rw_buff(&fd_buff->wbuff);
+}
+
 void fd_buff_write_content(struct fd_buff_handler *fd_conn)
 {
   ssize_t rv = 0;
-  size_t bytes_written = 0;
+  fd_conn->wbuff_sent = 0;
 
   do {
-    rv = send(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size - bytes_written, 0);
+    rv = send(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size - fd_conn->wbuff_sent, 0);
 
     if (rv != -1) {
-      bytes_written += rv;
+      fd_conn->wbuff_sent += rv;
     } else {
       if (errno == EAGAIN) {
         break;
@@ -52,14 +65,14 @@ void fd_buff_write_content(struct fd_buff_handler *fd_conn)
     }
   } while (rv > 0);
 
-  fprintf(stdout, "Sent response of %ld bytes to FD %d\n", fd_conn->wbuff.buff_size, fd_conn->fd);
+  fprintf(stdout, "Sent response of %ld bytes to FD %d\n", fd_conn->wbuff_sent, fd_conn->fd);
   fd_conn->state = STATE_END;
 }
 
 void fd_buff_buffered_read(struct fd_buff_handler *fd_conn)
 {
   ssize_t bytes_read = 0;
-  fd_conn->rbuff.buff_size = 0;
+  // fd_conn->rbuff.buff_size = 0;
 
   do {
     bytes_read = recv(fd_conn->fd, fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_capacity - fd_conn->rbuff.buff_size, 0);
@@ -137,7 +150,7 @@ void serv_accept_connection(int serv_fd, struct fd_buff_handler *fd_buff_structs
     if (conn_fd < 0)
       break;
     fd_set_non_blocking(conn_fd);
-    fprintf(stdout, "Accepted %s\n", inet_ntoa(cli.sin_addr));
+    /* fprintf(stdout, "Accepted %s\n", inet_ntoa(cli.sin_addr)); */
     /* Save in first vacant */
     for (size_t i = 0; i < fd_buff_structs_size; ++i) {
       if (fd_buff_structs[i].fd <= 0) {

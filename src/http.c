@@ -262,10 +262,8 @@ int main(void)
 
             /* Clean up array */
             if (serv_pollfd_buffs[i - 1].fd > 0 && serv_pollfd_buffs[i - 1].state == STATE_END) {
-              /* fprintf(stdout, "%p: Closing FD %d in serv_pollfd_buffs[%ld]\n", serv_pollfd_buffs + (i - 1), serv_pollfd_buffs[i - 1].fd, i - 1); */
-
               close(serv_pollfd_buffs[i - 1].fd);
-              serv_pollfd_buffs[i - 1].fd = 0;
+              clear_fd_buff_handler(&serv_pollfd_buffs[i - 1]);
             }
           } 
         }
