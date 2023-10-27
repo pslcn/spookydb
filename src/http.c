@@ -222,6 +222,7 @@ void http_handle_resp(int conn_fd, struct fd_conn_buffs *fd_buffs)
       fprintf(stderr, "[http_handle_resp] Error writing to FD: %s\n", strerror(errno));
     }
 
+    close(conn_fd);
     fd_buffs->state = STATE_READY;
   }
 }
