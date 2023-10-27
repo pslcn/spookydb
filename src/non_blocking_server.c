@@ -33,6 +33,7 @@ void clear_rw_buff(struct rw_buff *buff)
 
 int create_fd_conn_buffs(struct fd_conn_buffs *fd_buffs, size_t buff_capacity)
 {
+  fd_buffs->state = STATE_READY;
   create_buff(&fd_buffs->rbuff, buff_capacity);
   create_buff(&fd_buffs->wbuff, buff_capacity);
   return 0;
@@ -71,50 +72,4 @@ int create_serv_sock(int *serv_fd, struct sockaddr_in *servaddr, int port)
   }
   return 0;
 }
-
-
-#if 0
-void fd_buff_write_content(struct fd_buff_handler *fd_conn)
-{
-  ssize_t rv = 0;
-  fd_conn->wbuff_sent = 0;
-
-  do {
-    rv = send(fd_conn->fd, fd_conn->wbuff.buff_content, fd_conn->wbuff.buff_size - fd_conn->wbuff_sent, 0);
-
-    if (rv != -1) {
-      fd_conn->wbuff_sent += rv;
-    } else {
-      if (errno == EAGAIN) {
-        break;
-      }
-
-      fprintf(stderr, "[fd_buff_write_content] Error writing to FD: %s\n", strerror(errno));
-    }
-  } while (rv > 0);
-
-  fprintf(stdout, "Sent response of %ld bytes to FD %d\n", fd_conn->wbuff_sent, fd_conn->fd);
-  fd_conn->state = STATE_END;
-}
-
-void fd_buff_buffered_read(struct fd_buff_handler *fd_conn)
-{
-  ssize_t bytes_read = 0;
-
-  do {
-    bytes_read = recv(fd_conn->fd, fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_capacity - fd_conn->rbuff.buff_size, 0);
-
-    if (bytes_read != -1) {
-      fd_conn->rbuff.buff_size += bytes_read;
-    } else {
-      if (errno == EAGAIN) {
-        fprintf(stderr, "[fd_buff_buffered_read] EAGAIN\n");
-        break;
-      }
-
-      fprintf(stderr, "[fd_buff_buffered_read] Error reading from FD:  %s\n", strerror(errno));
-    }
-  } while (bytes_read > 0);
-}
-#endif
 

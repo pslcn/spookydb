@@ -181,14 +181,13 @@ void http_handle_req(int conn_fd, struct fd_conn_buffs *fd_buffs)
     fd_buffs->rbuff.buff_size += rv;
   } else {
     if (rv == -1) {
-      if (errno == EAGAIN) {
-        fprintf(stderr, "[http_handle_req] EAGAIN\n");
-      } else {
+      if (errno != EAGAIN) {
         fprintf(stderr, "[http_handle_req] Error reading from FD: %s\n", strerror(errno));
       }
+    } else {
+      fprintf(stdout, "[http_handle_req] Read %ld bytes\n", fd_buffs->rbuff.buff_size);
+      fd_buffs->state = STATE_RES;
     }
-
-    fd_buffs->state = STATE_RES;
   }
 }
 
