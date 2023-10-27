@@ -197,7 +197,7 @@ void http_handle_req(int conn_fd, struct fd_conn_buffs *fd_buffs)
 void http_handle_res(int conn_fd, struct fd_conn_buffs *fd_buffs)
 {
   if (fd_buffs->wbuff.buff_size == 0) {
-    char req_method[6], req_path[BUFFSIZE], req_body[BUFFSIZE];
+    char req_method[7], req_path[BUFFSIZE], req_body[BUFFSIZE];
 
     http_parse_req(fd_buffs->rbuff.buff_content, fd_buffs->rbuff.buff_size, req_method, req_path, req_body);
     fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", req_method, req_path, req_body); 
