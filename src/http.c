@@ -104,7 +104,7 @@ static void http_parse_message_line(char *req, size_t req_size, struct parsed_ht
   }
 }
 
-void http_parse_req(char *req, size_t req_size, struct parsed_http_req *parsed_http_req)
+void http_parse_req(char *req, size_t req_size, char *req_method, char *req_path, char *req_body)
 {
   size_t idx_headers, idx_req_body;
 
@@ -173,38 +173,52 @@ void http_format_resp(char *resp, char *status, char *resp_headers, char *resp_b
 }
 
 
-void http_handle_req(struct fd_buff_handler *fd_conn, struct parsed_http_req *parsed_http_req)
+void http_handle_req(int conn_fd, struct fd_conn_buffs *fd_buffs)
 {
-  fd_buff_buffered_read(fd_conn);
+  ssize_t rv;
 
-  http_parse_req(fd_conn->rbuff.buff_content, fd_conn->rbuff.buff_size, parsed_http_req);
-  fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", parsed_http_req->req_method, parsed_http_req->req_path, parsed_http_req->req_body); 
+  rv = recv(conn_fd, &fd_buffs->rbuff.buff_content[fd_buffs->rbuff.buff_size], fd_buffs->rbuff.buff_capacity - fd_buffs->rbuff.buff_size, 0);
 
-  char resp[RESP_LEN];
-  /* (Indexing req_path at 1 excludes '/') */
-  if (strncmp(parsed_http_req->req_method, "GET", 4) == 0) {
-    http_format_resp(resp, "200 OK", "Content-Type: text/plain", "NULL\n");
+  if (rv > 0) {
+    fd_buffs->rbuff.buff_size += rv;
+  } else {
+    if (rv == -1) {
+      if (errno == EAGAIN) {
+        fprintf(stderr, "[http_handle_req] EAGAIN\n");
+      } else {
+        fprintf(stderr, "[http_handle_req] Error reading from FD: %s\n", strerror(errno));
+      }
+    }
 
-  } else if (strncmp(parsed_http_req->req_method, "PUT", 4) == 0) {
-    http_format_resp(resp, "200 OK", "Content-Type: text/plain", "");
-
-  } else if (strncmp(parsed_http_req->req_method, "DELETE", 7) == 0) {
-    http_format_resp(resp, "200 OK", "Content-Type: text/plain", "");
+    fd_buffs->state = STATE_RES;
   }
+}
 
-  size_t resp_bytes = 0;
-  for (size_t i = 0; i < LENGTH(resp); ++i) {
-    if (resp[i] == '\0') {
-      resp_bytes = i;
-      break;
-    } 
+void http_handle_res(int conn_fd, struct fd_conn_buffs *fd_buffs)
+{
+  if (fd_buffs->wbuff.buff_size == 0) {
+    char req_method[6], req_path[BUFFSIZE], req_body[BUFFSIZE];
+
+    http_parse_req(fd_buffs->rbuff.buff_content, fd_buffs->rbuff.buff_size, req_method, req_path, req_body);
+    fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", req_method, req_path, req_body); 
+
+    if (strncmp(req_method, "GET", 4) == 0) {
+      http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "NULL\n");
+
+    } else if (strncmp(req_method, "PUT", 4) == 0) {
+      http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "");
+
+    } else if (strncmp(req_method, "DELETE", 7) == 0) {
+      http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "");
+    }
+
+    fd_buffs->wbuff.buff_size = strlen(fd_buffs->wbuff.buff_content);
+  } else {
+    fd_buff_write_content(fd_conn);
+
+    if () 
+      fd_buffs->state = STATE_READY;
   }
-
-  /* Copy response to fd_conn->wbuff.buff_content and switch to response state */
-  memcpy(fd_conn->wbuff.buff_content, &resp, resp_bytes);
-  fd_conn->wbuff.buff_size = resp_bytes;
-  fd_conn->state = STATE_RES;
-  fd_buff_write_content(fd_conn);
 }
 
 volatile sig_atomic_t stop;
@@ -256,10 +270,10 @@ void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
         if (pollfds[i].fd > 0 && pollfds[i].revents) {
           switch (fd_buffs[i - 1].state) {
             case STATE_REQ:
-              http_handle_req(&fd_buffs[i - 1]);
+              http_handle_req(pollfds[i].fd, &fd_buffs[i - 1]);
               break;
             case STATE_RES:
-              http_handle_res(&fd_buffs[i - 1]);
+              http_handle_res(pollfds[i].fd, &fd_buffs[i - 1]);
               break;
           }
         }
