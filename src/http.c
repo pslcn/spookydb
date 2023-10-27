@@ -234,26 +234,30 @@ void inthand(int signum)
   stop = 1;
 }
 
-static void save_connection(struct pollfd *pollfd_queue, struct fd_conn_buffs *fd_buffs, int conn_fd, int *nfds)
+static void save_connection(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs, int conn_fd, int *nfds)
 {
   for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
     if (fd_buffs[i].state == STATE_READY) {
+      /* fprintf(stdout, "[save_connection] Saving FD %d in pollfds[%ld]\n", conn_fd, i + 1); */
+
       fd_buffs[i].state = STATE_REQ;
       clear_rw_buff(&fd_buffs[i].rbuff);
       clear_rw_buff(&fd_buffs[i].wbuff);
 
-      pollfd_queue[i].fd = conn_fd;
-      pollfd_queue[i].events = (fd_buffs[i].state == STATE_REQ) ? POLLIN : POLLOUT;
-      pollfd_queue[i].events |= POLLERR;
-      pollfd_queue[i].revents = 0;
+      pollfds[i + 1].fd = conn_fd;
+      pollfds[i + 1].events = (fd_buffs[i].state == STATE_REQ) ? POLLIN : POLLOUT;
+      pollfds[i + 1].events |= POLLERR;
+      pollfds[i + 1].revents = 0;
       *nfds += 1;
+
+      return;
     }
   }
 }
 
 static void check_listening_socket(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs, int *nfds)
 {
-  if (pollfds[0].revents & POLLIN && *nfds < NUM_CONNECTIONS - 1) {
+  if (pollfds[0].revents & POLLIN && *nfds < NUM_CONNECTIONS + 1) {
     int conn_fd;
     struct sockaddr_in cli;
     socklen_t addrlen = sizeof(cli);
@@ -261,7 +265,7 @@ static void check_listening_socket(struct pollfd *pollfds, struct fd_conn_buffs 
     conn_fd = accept(pollfds[0].fd, (struct sockaddr *)&cli, &addrlen);
     fd_set_non_blocking(conn_fd);
 
-    save_connection(&pollfds[1], fd_buffs, conn_fd, nfds); 
+    save_connection(pollfds, fd_buffs, conn_fd, nfds); 
   }
 }
 
@@ -272,7 +276,7 @@ void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
 
   while(!stop) {
     if (poll(pollfds, nfds, 5000) > 0) {
-      for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
+      for (size_t i = 1; i < NUM_CONNECTIONS + 1; ++i) {
         if (pollfds[i].fd > 0 && pollfds[i].revents) {
           switch (fd_buffs[i - 1].state) {
             case STATE_REQ:
@@ -296,7 +300,7 @@ int main(void)
 
   int serv_fd;
   struct sockaddr_in servaddr;
-  struct pollfd pollfds[NUM_CONNECTIONS];
+  struct pollfd pollfds[NUM_CONNECTIONS + 1];
   struct fd_conn_buffs fd_buffs[NUM_CONNECTIONS]; 
 
   for (size_t i = 0; i < NUM_CONNECTIONS; ++i)
