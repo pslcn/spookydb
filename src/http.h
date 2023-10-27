@@ -5,15 +5,12 @@
 #define NUM_CONNECTIONS 32
 #define RESP_LEN 1024
 
-struct parsed_http_req {
-  char *req_method, *req_path, *req_body;
-};
+void http_parse_req(char *req, size_t req_size, char *req_method, char *req_path, char *req_body);
+void http_format_res(char *resp, char *status, char *resp_headers, char *resp_body);
+void http_handle_req(int conn_fd, struct fd_conn_buffs *fd_buffs);
+void http_handle_res(int conn_fd, struct fd_conn_buffs *fd_buffs);
 
-int create_parsed_http_req(struct parsed_http_req *parsed_http_req);
-void clear_parsed_http_req(struct parsed_http_req *parsed_http_req);
-void http_parse_req(char *req, size_t req_size, struct parsed_http_req *parsed_http_req);
-void http_format_resp(char *resp, char *status, char *resp_headers, char *resp_body);
-void http_handle_req(struct fd_buff_handler *fd_conn, struct parsed_http_req *parsed_http_req);
+void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs);
 
 #endif
 

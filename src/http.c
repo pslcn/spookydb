@@ -76,25 +76,23 @@ static size_t http_parse_headers(char *req, size_t req_size, size_t start_idx)
   }
 }
 
-static void http_parse_message_line(char *req, size_t req_size, struct parsed_http_req *parsed_http_req, size_t *idx_headers)
+static void http_parse_message_line(char *req, size_t req_size, char *req_method, char *req_path, size_t *idx_headers)
 {
-  clear_parsed_http_req(parsed_http_req);
-
   int spaces = 0;
 
   for (size_t c = 0; c < req_size; ++c) {
     if (spaces == 0) {
       if (req[c] != ' ')
-        parsed_http_req->req_method[c] = req[c];
+        req_method[c] = req[c];
       else {
-        parsed_http_req->req_method[c] = '\0';
+        req_method[c] = '\0';
         spaces = c + 1;
       }
     } else {
       if (req[c] != ' ')
-        parsed_http_req->req_path[c - spaces] = req[c];
+        req_path[c - spaces] = req[c];
       else {
-        parsed_http_req->req_path[c - spaces] = '\0';
+        req_path[c - spaces] = '\0';
 
         http_get_crlf_idx(req, req_size, c, idx_headers);
         *idx_headers += 2;
@@ -108,16 +106,16 @@ void http_parse_req(char *req, size_t req_size, char *req_method, char *req_path
 {
   size_t idx_headers, idx_req_body;
 
-  http_parse_message_line(req, req_size, parsed_http_req, &idx_headers);
+  http_parse_message_line(req, req_size, req_method, req_path, &idx_headers);
   idx_req_body = http_parse_headers(req, req_size, idx_headers);
 
   if (req[idx_req_body] == '\r' && req[idx_req_body + 1] == '\n') {
-    memcpy(parsed_http_req->req_body, "", 1);
+    memcpy(req_body, "", 1);
   } else {
     for (size_t c = idx_req_body; c < req_size; ++c) {
-      parsed_http_req->req_body[c - idx_req_body] = req[c];
+      req_body[c - idx_req_body] = req[c];
     }
-    parsed_http_req->req_body[req_size - idx_req_body] = '\0';
+    req_body[req_size - idx_req_body] = '\0';
   }
 }
 
@@ -194,7 +192,7 @@ void http_handle_req(int conn_fd, struct fd_conn_buffs *fd_buffs)
   }
 }
 
-void http_handle_res(int conn_fd, struct fd_conn_buffs *fd_buffs)
+void http_handle_resp(int conn_fd, struct fd_conn_buffs *fd_buffs)
 {
   if (fd_buffs->wbuff.buff_size == 0) {
     char req_method[7], req_path[BUFFSIZE], req_body[BUFFSIZE];
@@ -204,20 +202,28 @@ void http_handle_res(int conn_fd, struct fd_conn_buffs *fd_buffs)
 
     if (strncmp(req_method, "GET", 4) == 0) {
       http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "NULL\n");
-
     } else if (strncmp(req_method, "PUT", 4) == 0) {
       http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "");
-
     } else if (strncmp(req_method, "DELETE", 7) == 0) {
       http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "");
     }
 
     fd_buffs->wbuff.buff_size = strlen(fd_buffs->wbuff.buff_content);
-  } else {
-    fd_buff_write_content(fd_conn);
+    fd_buffs->wbuff_sent = 0;
+  } 
 
-    if () 
-      fd_buffs->state = STATE_READY;
+  ssize_t rv;
+
+  rv = send(conn_fd, fd_buffs->wbuff.buff_content, fd_buffs->wbuff.buff_size - fd_buffs->wbuff_sent, 0);
+
+  if (rv > 0) {
+    fd_buffs->wbuff_sent += rv;
+  } else {
+    if (rv == -1) {
+      fprintf(stderr, "[http_handle_resp] Error writing to FD: %s\n", strerror(errno));
+    }
+
+    fd_buffs->state = STATE_READY;
   }
 }
 
@@ -273,7 +279,7 @@ void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
               http_handle_req(pollfds[i].fd, &fd_buffs[i - 1]);
               break;
             case STATE_RES:
-              http_handle_res(pollfds[i].fd, &fd_buffs[i - 1]);
+              http_handle_resp(pollfds[i].fd, &fd_buffs[i - 1]);
               break;
           }
         }
