@@ -21,22 +21,6 @@
 
 #define LENGTH(X) (sizeof X / sizeof X[0])
 
-/* Only supports GET, PUT, and DELETE; DELETE is 6 characters */
-int create_parsed_http_req(struct parsed_http_req *parsed_http_req)
-{
-  parsed_http_req->req_method = malloc(sizeof(char) * 6);
-  parsed_http_req->req_path = malloc(sizeof(char) * BUFFSIZE);
-  parsed_http_req->req_body = malloc(sizeof(char) * BUFFSIZE);
-  return 0;
-}
-
-void clear_parsed_http_req(struct parsed_http_req *parsed_http_req)
-{
-  memset(parsed_http_req->req_method, 0, 6);
-  memset(parsed_http_req->req_path, 0, BUFFSIZE);
-  memset(parsed_http_req->req_body, 0, BUFFSIZE);
-}
-
 static void http_header_value_start(char *req, size_t req_size, size_t start_idx, size_t *header_value_idx)
 {
   size_t after_colon = 0;
@@ -137,8 +121,6 @@ void http_parse_req(char *req, size_t req_size, struct parsed_http_req *parsed_h
   }
 }
 
-
-
 void http_format_resp(char *resp, char *status, char *resp_headers, char *resp_body)
 {
   size_t resp_num_chars = 9;
@@ -225,65 +207,90 @@ void http_handle_req(struct fd_buff_handler *fd_conn, struct parsed_http_req *pa
   fd_buff_write_content(fd_conn);
 }
 
+volatile sig_atomic_t stop;
+
+void inthand(int signum)
+{
+  stop = 1;
+}
+
+static void save_connection(struct pollfd *pollfd_queue, struct fd_conn_buffs *fd_buffs, int conn_fd, int *nfds)
+{
+  for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
+    if (fd_buffs[i].state == STATE_READY) {
+      fd_buffs[i].state = STATE_REQ;
+      clear_rw_buff(&fd_buffs[i].rbuff);
+      clear_rw_buff(&fd_buffs[i].wbuff);
+
+      pollfd_queue[i].fd = conn_fd;
+      pollfd_queue[i].events = (fd_buffs[i].state == STATE_REQ) ? POLLIN : POLLOUT;
+      pollfd_queue[i].events |= POLLERR;
+      pollfd_queue[i].revents = 0;
+      *nfds += 1;
+    }
+  }
+}
+
+static void check_listening_socket(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs, int *nfds)
+{
+  if (pollfds[0].revents & POLLIN && *nfds < NUM_CONNECTIONS - 1) {
+    int conn_fd;
+    struct sockaddr_in cli;
+    socklen_t addrlen = sizeof(cli);
+
+    conn_fd = accept(pollfds[0].fd, (struct sockaddr *)&cli, &addrlen);
+    fd_set_non_blocking(conn_fd);
+
+    save_connection(&pollfds[1], fd_buffs, conn_fd, nfds); 
+  }
+}
+
+/* There is no fd_conn_buffs struct for the serv_fd */
+void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
+{
+  int nfds = 1;
+
+  while(!stop) {
+    if (poll(pollfds, nfds, 5000) > 0) {
+      for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
+        if (pollfds[i].fd > 0 && pollfds[i].revents) {
+          switch (fd_buffs[i - 1].state) {
+            case STATE_REQ:
+              http_handle_req(&fd_buffs[i - 1]);
+              break;
+            case STATE_RES:
+              http_handle_res(&fd_buffs[i - 1]);
+              break;
+          }
+        }
+      }
+
+      check_listening_socket(pollfds, fd_buffs, &nfds);
+    }
+  }
+}
 
 int main(void) 
 {
+  signal(SIGINT, inthand);
+
   int serv_fd;
   struct sockaddr_in servaddr;
+  struct pollfd pollfds[NUM_CONNECTIONS];
+  struct fd_conn_buffs fd_buffs[NUM_CONNECTIONS]; 
 
-  struct pollfd serv_pollfd_array[NUM_CONNECTIONS];
-  struct fd_buff_handler serv_pollfd_buffs[NUM_CONNECTIONS];
-  struct parsed_http_req parsed_http_reqs[NUM_CONNECTIONS];
-  size_t nfds = 1;
-
-  for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-    create_fd_buff_handler(&(serv_pollfd_buffs[i]), BUFFSIZE, BUFFSIZE);
-    create_parsed_http_req(&(parsed_http_reqs[i]));
-  }
+  for (size_t i = 0; i < NUM_CONNECTIONS; ++i)
+    create_fd_conn_buffs(&fd_buffs[i], BUFFSIZE);
 
   if (create_serv_sock(&serv_fd, &servaddr, 8080) != 0)
     exit(1);
   if (listen(serv_fd, (int)(NUM_CONNECTIONS / 2)) < 0)
     exit(1);
-  serv_pollfd_array[0].fd = serv_fd;
-  serv_pollfd_array[0].events = POLLIN;
+  pollfds[0].fd = serv_fd;
+  pollfds[0].events = POLLIN;
 
-  while(1) {
-    /* Blocks until pollfd array has been prepared */
-    if (prepare_pollfd_array(serv_pollfd_buffs, &(serv_pollfd_array[1]), NUM_CONNECTIONS, &nfds) == 0) {
-      if (poll(serv_pollfd_array, nfds, 5000) > 0) {
-        for (size_t i = 1; i < NUM_CONNECTIONS; ++i) {
-          if (serv_pollfd_array[i].fd > 0 && serv_pollfd_array[i].revents) {
-            if (serv_pollfd_buffs[i - 1].state == STATE_REQ) {
-              http_handle_req(&(serv_pollfd_buffs[i - 1]), &parsed_http_reqs[i - 1]);
-            } else if (serv_pollfd_buffs[i - 1].state == STATE_RES)
-              fd_buff_write_content(&(serv_pollfd_buffs[i - 1]));
+  serve(pollfds, fd_buffs); 
 
-            /* Clean up array */
-            if (serv_pollfd_buffs[i - 1].fd > 0 && serv_pollfd_buffs[i - 1].state == STATE_END) {
-              close(serv_pollfd_buffs[i - 1].fd);
-              clear_fd_buff_handler(&serv_pollfd_buffs[i - 1]);
-            }
-          } 
-        }
-
-        /* Check listening socket for connections to accept */
-        if (serv_pollfd_array[0].revents & POLLIN) {
-          serv_accept_connection(serv_fd, serv_pollfd_buffs, NUM_CONNECTIONS);
-        }
-      }
-    }
-  }
-
-  /* Close FDs */
-  fprintf(stdout, "Closing listening socket FD %d\n", serv_fd);
-  close(serv_fd);
-  for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
-    if (serv_pollfd_buffs[i].fd > 0) {
-      fprintf(stdout, "Closing FD %d in serv_pollfd_buffs[%ld]\n", serv_pollfd_buffs[i].fd, i);
-      close(serv_pollfd_buffs[i].fd);
-    }
-  }
   return 0;
 }
 
