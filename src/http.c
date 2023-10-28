@@ -179,6 +179,7 @@ void http_handle_req(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
 
   if (rv > 0) {
     fd_buffs->rbuff.buff_size += rv;
+    fprintf(stdout, "Read %ld bytes from FD %d\n", fd_buffs->rbuff.buff_size, conn_pollfd->fd);
   } else if (rv == 0 || errno == EAGAIN) {
     fprintf(stdout, "[http_handle_req] Read %ld bytes\n", fd_buffs->rbuff.buff_size);
     fd_buffs->state = STATE_RES;
@@ -190,8 +191,6 @@ void http_handle_req(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
 
 void http_handle_resp(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
 {
-  fprintf(stdout, "[http_handle_resp] FD: %d\n", conn_pollfd->fd);
-
   if (fd_buffs->wbuff.buff_size == 0) {
     char req_method[7], req_path[BUFFSIZE], req_body[BUFFSIZE];
 
@@ -216,6 +215,7 @@ void http_handle_resp(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs
 
   if (rv > 0) {
     fd_buffs->wbuff_sent += rv;
+    fprintf(stdout, "Wrote %ld bytes to FD %d\n", fd_buffs->wbuff_sent, conn_pollfd->fd);
   } else {
     if (rv == -1) {
       fprintf(stderr, "[http_handle_resp] Error writing to FD: %s\n", strerror(errno));
@@ -297,6 +297,7 @@ void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
 
   while (!stop) {
     for (size_t i = 1; i < NUM_CONNECTIONS + 1; ++i) {
+      fprintf(stdout, "(total nfds: %d) %ld: FD %d state %d\n", nfds, i, pollfds[i].fd, fd_buffs[i - 1].state);
       handle_fd_io(&pollfds[i], &fd_buffs[i - 1], &nfds);
       reset_pollfd_events(&pollfds[i], &fd_buffs[i - 1]);
     }

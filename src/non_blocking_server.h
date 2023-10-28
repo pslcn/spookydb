@@ -1,10 +1,10 @@
 #ifndef NON_BLOCKING_SERVER_H_
 #define NON_BLOCKING_SERVER_H_
 
-enum {
+enum io_state {
   STATE_READY = 0,
   STATE_REQ = 1,
-  STATE_RES = 2,
+  STATE_RES = 2
 };
 
 struct rw_buff {
@@ -13,7 +13,7 @@ struct rw_buff {
 };
 
 struct fd_conn_buffs {
-  uint32_t state;
+  enum io_state state;
   struct rw_buff rbuff, wbuff;
   size_t wbuff_sent;
 };
