@@ -181,7 +181,8 @@ void http_handle_req(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
     fd_buffs->rbuff.buff_size += rv;
   } else if (rv == 0 || errno == EAGAIN) {
     fprintf(stdout, "[http_handle_req] Read %ld bytes\n", fd_buffs->rbuff.buff_size);
-      fd_buffs->state = STATE_RES;
+    fd_buffs->state = STATE_RES;
+    conn_pollfd->events = POLLOUT;
   } else if (rv == -1) {
     fprintf(stderr, "[http_handle_req] Error reading from FD: %s\n", strerror(errno));
   }
@@ -189,6 +190,8 @@ void http_handle_req(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
 
 void http_handle_resp(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
 {
+  fprintf(stdout, "[http_handle_resp] FD: %d\n", conn_pollfd->fd);
+
   if (fd_buffs->wbuff.buff_size == 0) {
     char req_method[7], req_path[BUFFSIZE], req_body[BUFFSIZE];
 
@@ -231,7 +234,7 @@ void inthand(int signum)
   stop = 1;
 }
 
-static void save_connection(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs, int conn_fd, int *nfds)
+static void save_connection(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs, int conn_fd)
 {
   for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
     if (fd_buffs[i].state == STATE_READY) {
@@ -242,19 +245,18 @@ static void save_connection(struct pollfd *pollfds, struct fd_conn_buffs *fd_buf
       clear_rw_buff(&fd_buffs[i].wbuff);
 
       pollfds[i + 1].fd = conn_fd;
-      pollfds[i + 1].events = (fd_buffs[i].state == STATE_REQ) ? POLLIN : POLLOUT;
+      pollfds[i + 1].events = POLLIN;
       pollfds[i + 1].events |= POLLERR;
       pollfds[i + 1].revents = 0;
-      *nfds += 1;
 
       return;
     }
   }
 }
 
-static void check_listening_socket(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs, int *nfds)
+static void check_listening_socket(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
 {
-  if (pollfds[0].revents & POLLIN && *nfds < NUM_CONNECTIONS + 1) {
+  if (pollfds[0].revents & POLLIN) {
     int conn_fd;
     struct sockaddr_in cli;
     socklen_t addrlen = sizeof(cli);
@@ -262,7 +264,7 @@ static void check_listening_socket(struct pollfd *pollfds, struct fd_conn_buffs 
     conn_fd = accept(pollfds[0].fd, (struct sockaddr *)&cli, &addrlen);
     fd_set_non_blocking(conn_fd);
 
-    save_connection(pollfds, fd_buffs, conn_fd, nfds); 
+    save_connection(pollfds, fd_buffs, conn_fd); 
   }
 }
 
@@ -278,32 +280,27 @@ void handle_fd_io(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
   }
 }
 
+static void reset_pollfd_events(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
+{
+  conn_pollfd->events = (fd_buffs->state == STATE_REQ) ? POLLIN : POLLOUT;
+  conn_pollfd->events |= POLLERR;
+  conn_pollfd->revents = 0;
+}
+
 /* There is no fd_conn_buffs struct for the serv_fd */
 void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
 {
   int nfds = 1;
 
-  /* 
-  while (!stop) {
-    if (poll(pollfds, nfds, 2000) > 0) {
-      for (size_t i = 1; i < NUM_CONNECTIONS + 1; ++i) {
-        if (pollfds[i].fd > 0 && pollfds[i].revents) {
-          handle_fd_io(&pollfds[i], &fd_buffs[i - 1]);      
-        }
-      }
-
-      check_listening_socket(pollfds, fd_buffs, &nfds);
-    }
-  }
-  */
-
   while (!stop) {
     for (size_t i = 1; i < NUM_CONNECTIONS + 1; ++i) {
       handle_fd_io(&pollfds[i], &fd_buffs[i - 1]);
+      reset_pollfd_events(&pollfds[i], &fd_buffs[i - 1]);
     }
 
-    poll(pollfds, nfds, 2000);
-    check_listening_socket(pollfds, fd_buffs, &nfds);
+    poll(pollfds, nfds, 1000); 
+    if (nfds < NUM_CONNECTIONS + 1)
+      check_listening_socket(pollfds, fd_buffs);
   }
 }
 
