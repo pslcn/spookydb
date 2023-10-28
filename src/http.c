@@ -234,7 +234,7 @@ void inthand(int signum)
   stop = 1;
 }
 
-static void save_connection(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs, int conn_fd)
+static void save_connection(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs, int conn_fd, int *nfds)
 {
   for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
     if (fd_buffs[i].state == STATE_READY) {
@@ -248,13 +248,14 @@ static void save_connection(struct pollfd *pollfds, struct fd_conn_buffs *fd_buf
       pollfds[i + 1].events = POLLIN;
       pollfds[i + 1].events |= POLLERR;
       pollfds[i + 1].revents = 0;
+      *nfds += 1;
 
       return;
     }
   }
 }
 
-static void check_listening_socket(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
+static void check_listening_socket(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs, int *nfds)
 {
   if (pollfds[0].revents & POLLIN) {
     int conn_fd;
@@ -264,11 +265,11 @@ static void check_listening_socket(struct pollfd *pollfds, struct fd_conn_buffs 
     conn_fd = accept(pollfds[0].fd, (struct sockaddr *)&cli, &addrlen);
     fd_set_non_blocking(conn_fd);
 
-    save_connection(pollfds, fd_buffs, conn_fd); 
+    save_connection(pollfds, fd_buffs, conn_fd, nfds); 
   }
 }
 
-void handle_fd_io(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
+void handle_fd_io(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs, int *nfds)
 {
   switch (fd_buffs->state) {
     case STATE_REQ:
@@ -276,6 +277,8 @@ void handle_fd_io(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
       break;
     case STATE_RES:
       http_handle_resp(conn_pollfd, fd_buffs);
+      if (fd_buffs->state == STATE_READY)
+        *nfds -= 1;
       break;
   }
 }
@@ -294,13 +297,13 @@ void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
 
   while (!stop) {
     for (size_t i = 1; i < NUM_CONNECTIONS + 1; ++i) {
-      handle_fd_io(&pollfds[i], &fd_buffs[i - 1]);
+      handle_fd_io(&pollfds[i], &fd_buffs[i - 1], &nfds);
       reset_pollfd_events(&pollfds[i], &fd_buffs[i - 1]);
     }
 
     poll(pollfds, nfds, 1000); 
     if (nfds < NUM_CONNECTIONS + 1)
-      check_listening_socket(pollfds, fd_buffs);
+      check_listening_socket(pollfds, fd_buffs, &nfds);
   }
 }
 
