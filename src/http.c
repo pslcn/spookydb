@@ -191,6 +191,26 @@ void http_format_resp(char *resp, char *status, char *resp_headers, char *resp_b
     resp[resp_num_chars] = '\0';
 }
 
+static void http_send_wbuff(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
+{
+    ssize_t rv;
+
+    rv = send(conn_pollfd->fd, &fd_buffs->wbuff.buff_content[fd_buffs->wbuff_sent], fd_buffs->wbuff.buff_size - fd_buffs->wbuff_sent, 0);
+
+    if (rv > 0) {
+        fd_buffs->wbuff_sent += rv;
+    } else {
+        if (rv == -1) {
+            fprintf(stderr, "[http_send_wbuff] Error sending to FD: %s\n", strerror(errno));
+        }
+
+        close(conn_pollfd->fd);
+        conn_pollfd->fd = 0;
+        fprintf(stdout, "[http_send_wbuff] Sent %ld bytes\n", fd_buffs->wbuff_sent);
+        fd_buffs->state = STATE_READY;
+    }
+}
+
 void http_handle_resp(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
 {
     if (fd_buffs->wbuff.buff_size == 0) {
@@ -211,22 +231,7 @@ void http_handle_resp(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs
         fd_buffs->wbuff_sent = 0;
     } 
 
-    ssize_t rv;
-
-    rv = send(conn_pollfd->fd, &fd_buffs->wbuff.buff_content[fd_buffs->wbuff_sent], fd_buffs->wbuff.buff_size - fd_buffs->wbuff_sent, 0);
-
-    if (rv > 0) {
-        fd_buffs->wbuff_sent += rv;
-        fprintf(stdout, "Wrote %ld bytes to FD %d\n", fd_buffs->wbuff_sent, conn_pollfd->fd);
-    } else {
-        if (rv == -1) {
-            fprintf(stderr, "[http_handle_resp] Error writing to FD: %s\n", strerror(errno));
-        }
-
-        close(conn_pollfd->fd);
-        conn_pollfd->fd = 0;
-        fd_buffs->state = STATE_READY;
-    }
+    http_send_wbuff(conn_pollfd, fd_buffs);
 }
 
 volatile sig_atomic_t stop;
