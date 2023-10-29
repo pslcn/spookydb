@@ -10,7 +10,7 @@ void http_format_res(char *resp, char *status, char *resp_headers, char *resp_bo
 void http_handle_req(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs);
 void http_handle_res(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs);
 
-void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs);
+void http_serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs);
 
 #endif
 

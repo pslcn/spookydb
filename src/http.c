@@ -295,8 +295,10 @@ static void reset_pollfd_events(struct pollfd *conn_pollfd, struct fd_conn_buffs
     conn_pollfd->revents = 0;
 }
 
-void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
+void http_serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
 {
+    signal(SIGINT, inthand);
+
     int nfds = 1;
 
     while (!stop) {
@@ -311,10 +313,9 @@ void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
     }
 }
 
+#if 0
 int main(void) 
 {
-    signal(SIGINT, inthand);
-
     int serv_fd;
     struct sockaddr_in servaddr;
     struct pollfd pollfds[NUM_CONNECTIONS + 1];
@@ -332,8 +333,9 @@ int main(void)
     pollfds[0].fd = serv_fd;
     pollfds[0].events = POLLIN;
 
-    serve(pollfds, fd_buffs); 
+    http_serve(pollfds, fd_buffs); 
 
     return 0;
 }
+#endif 
 
