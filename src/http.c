@@ -240,8 +240,6 @@ static void save_connection(struct pollfd *pollfds, struct fd_conn_buffs *fd_buf
 {
     for (size_t i = 0; i < NUM_CONNECTIONS; ++i) {
         if (fd_buffs[i].state == STATE_READY) {
-            /* printf("[save_connection] Saving FD %d in pollfds[%ld]\n", conn_fd, i + 1); */
-
             fd_buffs[i].state = STATE_REQ;
             clear_rw_buff(&fd_buffs[i].rbuff);
             clear_rw_buff(&fd_buffs[i].wbuff);
@@ -292,7 +290,6 @@ static void reset_pollfd_events(struct pollfd *conn_pollfd, struct fd_conn_buffs
     conn_pollfd->revents = 0;
 }
 
-/* There is no fd_conn_buffs struct for the serv_fd */
 void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
 {
     int nfds = 1;
@@ -303,7 +300,7 @@ void serve(struct pollfd *pollfds, struct fd_conn_buffs *fd_buffs)
             reset_pollfd_events(&pollfds[i], &fd_buffs[i - 1]);
         }
 
-        poll(pollfds, nfds, 1000); 
+        poll(pollfds, nfds, 10); 
         if (nfds < NUM_CONNECTIONS + 1)
             check_listening_socket(pollfds, fd_buffs, &nfds);
     }
