@@ -211,7 +211,18 @@ static void http_send_wbuff(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd
     }
 }
 
-void http_handle_resp(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
+static void request_router(char *req_method, struct fd_conn_buffs *fd_buffs)
+{
+    if (strcmp(req_method, "GET") == 0) {
+        http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "NULL\n");
+    } else if (strcmp(req_method, "PUT") == 0) {
+        http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "");
+    } else if (strcmp(req_method, "DELETE") == 0) {
+        http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "");
+    }
+}
+
+void http_handle_resp(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs, void (*request_router)(char *, struct fd_conn_buffs *))
 {
     if (fd_buffs->wbuff.buff_size == 0) {
         char req_method[7], req_path[BUFFSIZE], req_body[BUFFSIZE];
@@ -219,13 +230,7 @@ void http_handle_resp(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs
         http_parse_req(fd_buffs->rbuff.buff_content, fd_buffs->rbuff.buff_size, req_method, req_path, req_body);
         fprintf(stdout, "METHOD: %s PATH: %s BODY: %s\n", req_method, req_path, req_body); 
 
-        if (strncmp(req_method, "GET", 4) == 0) {
-            http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "NULL\n");
-        } else if (strncmp(req_method, "PUT", 4) == 0) {
-            http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "");
-        } else if (strncmp(req_method, "DELETE", 7) == 0) {
-            http_format_resp(fd_buffs->wbuff.buff_content, "200 OK", "Content-Type: text/plain", "");
-        }
+        (*request_router)(req_method, fd_buffs);
 
         fd_buffs->wbuff.buff_size = strlen(fd_buffs->wbuff.buff_content);
         fd_buffs->wbuff_sent = 0;
@@ -281,7 +286,7 @@ void handle_fd_io(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs, in
             http_handle_req(conn_pollfd, fd_buffs);
             break;
         case STATE_RES:
-            http_handle_resp(conn_pollfd, fd_buffs);
+            http_handle_resp(conn_pollfd, fd_buffs, &request_router);
             if (fd_buffs->state == STATE_READY)
                 *nfds -= 1;
             break;
