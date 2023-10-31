@@ -135,8 +135,21 @@ void http_handle_req(struct pollfd *conn_pollfd, struct fd_conn_buffs *fd_buffs)
             fprintf(stdout, "[http_handle_req] Read %ld bytes\n", fd_buffs->rbuff.buff_size);
             fd_buffs->state = STATE_RES;
         } else {
-            fprintf(stderr, "[http_handle_req] Error reading from FD: %s\n", strerror(errno));
+            if (errno != EAGAIN)
+                fprintf(stderr, "[http_handle_req] Error reading from FD: %s\n", strerror(errno));
         }
+    }
+}
+
+void content_length_to_string(int int_content_length, char *str_content_length)
+{
+    int curr;
+
+    for (size_t i = 0; i < 32; ++i) {
+        curr = int_content_length % 10;
+        str_content_length[i] = '0' + curr; /* Getting ASCII code */
+        int_content_length -= curr;
+        int_content_length /= 10;
     }
 }
 
@@ -153,19 +166,8 @@ void http_format_resp(char *resp, char *status, char *resp_headers, char *resp_b
     memcpy(&resp[resp_num_chars], "Content-Length: ", 16); /* Not null-terminated */
     resp_num_chars += 16;
 
-    /* Convert content length into string (ASCII) */
-    int int_content_length = strlen(resp_body);
     char str_content_length[32];
-    int curr;
-    for (size_t i = 0; i < 32; ++i) {
-        curr = int_content_length % 10;
-
-        /* Getting ASCII code */
-        str_content_length[i] = '0' + curr;
-
-        int_content_length -= curr;
-        int_content_length /= 10;
-    }
+    content_length_to_string(strlen(resp_body), str_content_length);
 
     /* Get number of digits */
     size_t num_digits = 1;
