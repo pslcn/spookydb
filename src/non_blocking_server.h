@@ -2,20 +2,20 @@
 #define NON_BLOCKING_SERVER_H_
 
 enum io_state {
-    STATE_READY = 0,
-    STATE_REQ = 1,
-    STATE_RES = 2
+        STATE_READY = 0,
+        STATE_REQ = 1,
+        STATE_RES = 2
 };
 
 struct rw_buff {
-    size_t buff_capacity, buff_size;
-    char *buff_content;
+        size_t buff_capacity, buff_size;
+        char *buff_content;
 };
 
 struct fd_conn_buffs {
-    enum io_state state;
-    struct rw_buff rbuff, wbuff;
-    size_t wbuff_sent;
+        enum io_state state;
+        struct rw_buff rbuff, wbuff;
+        size_t wbuff_sent;
 };
 
 int create_buff(struct rw_buff *buff, size_t buff_capacity);
