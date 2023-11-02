@@ -4,6 +4,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/socket.h>
 #include <signal.h>
 #include <sys/types.h>
