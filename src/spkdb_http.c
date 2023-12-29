@@ -1,20 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <syslog.h>
-#include <sys/time.h>
-#include <pthread.h>
-#include <poll.h>
-#include <fcntl.h> 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <signal.h>
+#include <poll.h>
 
 #include "non_blocking_server.h"
 #include "spkdb_http.h"
