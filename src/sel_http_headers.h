@@ -2,11 +2,22 @@
 #define SEL_HTTP_HEADERS_H_
 
 #define LIST_OF_SEL_HEADERS \
+        X(Content-Length, content_length) \
         X(Host, host) \
         X(User-Agent, user_agent) \
-        X(Accept, accept) \
         X(Keep-Alive, keep_alive) \
-        X(Cache-Control, cache_control)
+        X(Cache-Control, cache_control) \
+        X(Content-Type, content_type) 
+
+int num_sel_headers = 0;
+#define X(a, b) num_sel_headers += 1;
+LIST_OF_SEL_HEADERS
+#undef X
+char *parsed_req_headers[num_sel_headers];
+for (size_t i = 0; i < num_sel_headers; ++i) {
+        parsed_req_headers[i] = malloc(sizeof(char) * BUFFSIZE);
+}
+
 
 struct parsed_req_headers {
 #define X(header_name, var_name) struct rw_buff var_name;

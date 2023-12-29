@@ -17,9 +17,7 @@
 #include <errno.h>
 
 #include "non_blocking_server.h"
-#include "http.h"
-
-#define LENGTH(X) (sizeof X / sizeof X[0])
+#include "spkdb_http.h"
 
 static void http_header_value_start(char *req, size_t req_size, size_t start_idx, size_t *header_value_idx)
 {
@@ -59,9 +57,10 @@ static size_t http_parse_headers(char *req, size_t req_size, size_t start_idx)
         while (1) {
                 if (req[next_idx] == '\r' && req[next_idx + 1] == '\n') {
                         return next_idx + 2;
-
                 } else {
                         http_get_crlf_idx(req, req_size, next_idx, &header_crlf_idx);
+
+
 
                         next_idx = header_crlf_idx + 2;
                 }
